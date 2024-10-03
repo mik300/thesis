@@ -11,4 +11,5 @@ tmp.txt
 resnet8_a8_w8_b32_fake_quant_cifar10_ReLU_bw_mult_9_9_*.pkl
 MARLIN/
 data/cifar-10-python.tar.gz
+data/dataset/
 approximate_multiplier
