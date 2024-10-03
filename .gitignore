@@ -1,0 +1,14 @@
+__pycache__/
+.idea/
+riscv_characterization/repo_changes/dory-mod/*.patch
+riscv_characterization/repo_changes/*/*.patch
+*.pth
+!neural_networks/models/.gitkeep
+!neural_networks/adapt/cpu-kernels-8x8/axx_mults_8x8/.gitkeep
+!neural_networks/adapt/cpu-kernels-9x9/axx_mults_9x9/.gitkeep
+backup/
+tmp.txt
+resnet8_a8_w8_b32_fake_quant_cifar10_ReLU_bw_mult_9_9_*.pkl
+MARLIN/
+data/
+approximate_multiplier
