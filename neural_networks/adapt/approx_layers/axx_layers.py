@@ -185,7 +185,7 @@ class AdaPT_Conv2d(_ConvNd):
             self.calibrator.calibrate_funct(input.detach())
 
         out = self._conv_forward(input, self.weight, self.bias)
-        # self.data_shape = out.shape
+        self.data_shape = out.shape
         out = self.scale_out(out, self.aq.scaling_factor, self.wq.scaling_factor)
         if self.bias is not None:
             out = out + self.scale_out(self.bq(self.bias).view(1, -1, 1, 1), self.bq.scaling_factor, 1)

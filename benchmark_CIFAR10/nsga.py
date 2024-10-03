@@ -1,6 +1,6 @@
 from pymoo.optimize import minimize
 from neural_networks.CIFAR10.resnet import resnet8, resnet14, resnet20, resnet32, resnet50, resnet56
-from neural_networks.utils import (get_loaders_split, evaluate_test_accuracy)
+from neural_networks.utils import (get_loaders_split, evaluate_test_accuracy, load_scaling_factors)
 from pymoo.algorithms.moo.nsga2 import NSGA2
 from benchmark_CIFAR10.Utils.utils import adapt_model_9x9
 from pymoo.core.problem import Problem
@@ -53,7 +53,7 @@ def main():
     train_args = {'epochs': params.epochs, 'lr_min': params.lr_min, 'lr_max': params.lr_max, 'batch': params.batch_size,
                   'weight_decay': params.weight_decay, 'num_workers': params.num_workers, 'lr_momentum': params.lr_momentum}
     model_name = "./neural_networks/models/" + params.neural_network + "_quant_baseline_model.pth"
-
+    scaling_factor_source = "./neural_networks/models/resnet8_a8_w8_b32_fake_quant_cifar10_ReLU_scaling_factors.pkl"
     torch.set_num_threads(params.threads)
 
     pkl_repo = './benchmark_CIFAR10/results_pkl/'
@@ -163,6 +163,7 @@ def main():
     print(n_appr_levels, n_levels)
     xl = 0  #lista di n_levels elementi, contiene il lower limit di ogni variabile,
     #sono n_levels moltiplicatori, quindi n_levels variabili con valori da 0 a 255
+    load_scaling_factors(model, scaling_factor_source, device = "cpu")
     mult_per_layer = GA_utils.list_mult_per_layer(model, imsize=imsize, axx_linear=params.axx_linear)
 
     power_list = GA_utils.mult_power_list(norm_power_file)
