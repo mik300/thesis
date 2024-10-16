@@ -10,6 +10,7 @@ from torchvision import ops
 from torchvision.models import efficientnet as ef
 import pickle
 from tqdm import tqdm
+from torch.utils.data import DataLoader, Subset
 
 def save_activations(model, input_tensor, filename="input_tensors.pkl"):
     input_tensors = {}
@@ -216,7 +217,7 @@ imagenet_mean = (0.485, 0.456, 0.406)
 imagenet_std=(0.229, 0.224, 0.225)
 
 
-def get_loaders_split(dir_, batch_size, dataset_type, num_workers=2, split_val=0.2, disable_aug=False, is_integer=False):
+def get_loaders_split(dir_, batch_size, dataset_type, num_workers=2, split_val=0.2, disable_aug=False, is_integer=False, test_size=None):
     """
     Generate train and test dataloaders
     @param dir_: string, directory in which the CIFAR-10 dataset is stored
@@ -298,6 +299,10 @@ def get_loaders_split(dir_, batch_size, dataset_type, num_workers=2, split_val=0
         # Train and validation samplers
         train_sampler = SubsetRandomSampler(train_indices)
         valid_sampler = SubsetRandomSampler(val_indices)
+
+        if test_size is not None:
+            subset_indices = list(range(test_size))  # Selecting first 5 images
+            test_dataset = Subset(test_dataset, subset_indices)
 
         train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=False, pin_memory=False, sampler=train_sampler, num_workers=num_workers)
 

@@ -3,16 +3,22 @@ import torch.nn as nn
 import torch.nn.functional as F
 from neural_networks.adapt.approx_layers import axx_layers
 from neural_networks.custom_layers import Conv2d, Linear, Act
+import pickle
 
 biasflag = False
+log = True
+torch.set_printoptions(threshold=float('inf'), precision=5, sci_mode=False)
+conv_inputs_path = "conv_inputs.txt"
+conv_outputs_path = "conv_output.txt"
+
 class ResidualModule(nn.Module):
     ratio = 1
     bn_momentum = 0.1
-
+    
     def __init__(self, input_channels, output_channels, stride=1, mode=None):
         
         super(ResidualModule, self).__init__()
-
+        self.layer_index = 1
         self.bn1 = nn.BatchNorm2d(input_channels, momentum=self.bn_momentum)
 
         if mode["execution_type"] == 'float':
@@ -65,10 +71,17 @@ class ResidualModule(nn.Module):
             return prex + x
 
     def forward(self, x):
+        conv_name = 'layer' + str(self.layer_index) + '.0.'
         out = self.act1(self.bn1(x))
+        log_to_file(out, 'conv1 input', conv_inputs_path, conv_name + 'conv1')
         out = self.conv1(out)
-        out = self.conv2(self.act2(self.bn2(out)))
+        log_to_file(out, 'conv1 output', conv_outputs_path, conv_name + 'conv1')
+        out = self.act2(self.bn2(out))
+        log_to_file(out, 'conv2 input', conv_inputs_path, conv_name + 'conv2')
+        out = self.conv2(out)
+        log_to_file(out, 'conv2 output', conv_outputs_path, conv_name + 'conv2')
         out = self.shortcut_identity(out, x) if hasattr(self, 'shortcut') else out + x
+        self.layer_index += 1
         return out
 
 
@@ -86,7 +99,7 @@ class ResNet(nn.Module):
 
         else:
             exit("unknown layer command")
-        print(mode.keys())
+        
         self.act = Act(act_bit=8, fake_quant=mode['fake_quant'], scaling_factor=None, calibrate=False)
 
         self.layer1 = self._make_res(res_block, 16, num_res_blocks[0], stride=1, mode=mode)
@@ -110,16 +123,55 @@ class ResNet(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x):
+        init_log()
+        log_to_file(x, 'Initial input', conv_inputs_path, 'conv1')
+        log_to_file(x, 'Initial input', conv_inputs_path, 'conv1')
         out = self.conv1(x)
+        log_to_file(out, 'conv1 output', conv_outputs_path, 'conv1')
         out = self.layer1(out)
         out = self.layer2(out)
         out = self.layer3(out)
         out = self.act(self.bn(out))
         out = F.avg_pool2d(out, 8)
         out = self.flatten(out)
+        log_to_file(out, 'linear input', conv_inputs_path, 'linear')
         out = self.linear(out)
+        log_to_file(out, 'linear output', conv_outputs_path, 'linear')
         return out
 
+
+def log_to_file(output, layer_name, filepath, conv_name):
+    if log == True:
+        tensor_scaled = output
+        if torch.is_tensor(output):
+            min_value = torch.min(output)
+            max_value = torch.max(output)
+            scaling_factor = scale_to_int8(output, conv_name)
+            #print(f'scaling_factor.type = {scaling_factor.type}')
+            tensor_scaled = torch.clamp(torch.round(scaling_factor * output), min=-128, max=127).to(torch.int8)
+            tensor_scaled = tensor_scaled.permute(0, 2, 3, 1) #permute the dimensions to match the definition of inputs in conv_layer.c 
+        with open(filepath, 'a') as f:
+            f.write(f'{layer_name} = {tensor_scaled}\n')
+
+
+def scale_to_int8(tensor, conv_name):
+    filename_sc = './neural_networks/models/resnet8_a8_w8_b32_fake_quant_cifar10_ReLU_scaling_factors.pkl'
+    with open(filename_sc, 'rb') as f:
+        scaling_factors = pickle.load(f)
+    
+    # Move all scaling factors to CPU
+    #print(f'scaling_factors.keys = {scaling_factors.keys()}')
+    for key, value in scaling_factors.items():
+        if isinstance(value, torch.Tensor) and value.is_cuda:
+            scaling_factors[key] = value.cpu()
+    #print(f'conv_name = {conv_name}')
+    return scaling_factors[conv_name]
+
+def init_log():
+    with open(conv_inputs_path, 'w') as f:
+        f.write("")
+    with open(conv_outputs_path, 'w') as f:
+        f.write("")
 
 def resnet8(mode=None):
     return ResNet(ResidualModule, [1, 1, 1], mode=mode)

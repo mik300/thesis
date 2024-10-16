@@ -14,6 +14,7 @@ class param_quantizer(torch.nn.Module):
         self.dtype = dtype
     def forward(self, x):
         self.scaling_factor = compute_scaling_factor(x, self.max_val)
+        #print(f'param scaling_factor = {self.scaling_factor}')
         return self.quantize(x,self.min_val,self.max_val, self.scaling_factor, self.dtype)
 
 
@@ -30,12 +31,13 @@ class act_quantizer(torch.nn.Module):
         self.dtype = dtype
         self.calibrated = False
         self.runtime_sc = 1.0
-
+        
     def forward(self, x):
         if self.scaling_factor is None and not self.calibrated:
             scaling_factor = compute_scaling_factor(x, self.max_val)
         else:
             scaling_factor = self.scaling_factor
+        #print(f'act scaling_factor = {self.scaling_factor}')
         return self.quantize(x,self.min_val,self.max_val, scaling_factor, self.dtype)
 
 
@@ -43,7 +45,8 @@ class quantize_tensor(Function):
     @staticmethod
     def forward(ctx, real_tensor, min_v, max_v, scaling_factor,dtype):
         ctx.save_for_backward(real_tensor)
-        return torch.clamp(torch.round(scaling_factor * real_tensor), min=min_v, max=max_v) / scaling_factor
+        quantized_tensor = torch.clamp(torch.round(scaling_factor * real_tensor), min=min_v, max=max_v) / scaling_factor
+        return quantized_tensor
 
     @staticmethod
     def backward(ctx, grad_out_tensor):  # straight-through estimator
@@ -85,6 +88,7 @@ class fake_scale_out_funct(Function):
 
 def compute_scaling_factor(real_tensor, max_v):
     t_max = torch.max(torch.abs(torch.min(real_tensor)), torch.abs(torch.max(real_tensor))).item()
+    # print(f't_max = {t_max}')
     if t_max == 0.0:   # avoid division by zero, should never happen in practice
         t_max = 1.0
     return max_v / t_max  # best usage of quantized range

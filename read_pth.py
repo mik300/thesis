@@ -10,19 +10,18 @@ import torch
 
 #print("Train Parameters:", checkpoint['train_parameters'])
 
-resnet = torch.load("neural_networks/models/resnet8_a8_w8_b32_fake_quant_cifar10_ReLU.pth")
+resnet = torch.load("neural_networks/models/resnet8_a8_w8_b32_fake_quant_cifar10_ReLU_calibrated.pth")
 print(resnet.keys())
 print("------")
 
 
-for key in resnet['model_state_dict'].keys():
-    print(f"{key} ({type(key)})")
+# for key in resnet['model_state_dict'].keys():
+#     print(f"{key} ({type(key)})")
 
 #print(f"epoch = {resnet['epoch']}")
-print(f"layer1.0.bn1.weight = {resnet['model_state_dict']['layer1.0.bn1.weight'].shape}")
-print(f"layer1.0.conv1.weight = {resnet['model_state_dict']['layer1.0.conv1.weight'].shape}")
-print(f"layer3.0.conv2.weight = {resnet['model_state_dict']['layer3.0.conv2.weight'].shape}")
-print(f"layer2.8.conv2.scaling_factor = {resnet['model_state_dict']['layer2.8.conv2.scaling_factor'].shape}")
+#print(f"layer1.0.bn1.bias = {resnet['model_state_dict']['layer1.0.bn1.bias']}")
+#print(f"layer1.0.conv1.weight = {resnet['model_state_dict']['layer1.0.conv1.weight'].shape}")
+# print(f"layer3.0.conv2.weight = {resnet['model_state_dict']['layer3.0.conv2.weight'].shape}")
 # print(f"train_loss = {resnet['train_loss']}")
 # print(f"train_acc = {resnet['train_acc']}")
 # print(f"test_loss = {resnet['test_loss']}")
@@ -36,3 +35,6 @@ print(f"layer2.8.conv2.scaling_factor = {resnet['model_state_dict']['layer2.8.co
 #     print(f"The key '{key_to_find}' exists with value: {resnet[key_to_find]}")
 # else:
 #     print(f"The key '{key_to_find}' does not exist.")
+
+
+#print(f"layer1.0.conv1.weight = {resnet['model_state_dict']['layer1.0.conv1.weight'].shape}")
