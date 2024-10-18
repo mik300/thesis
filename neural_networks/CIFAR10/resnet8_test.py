@@ -135,7 +135,7 @@ def main():
     filename_weights = model_dir + args.neural_network + namebit + namequant + "_quant_" + args.dataset + "_" + args.activation_function + '_weights.pkl'
 
 
-    mult_type = base_mult + str(0)
+    mult_type = base_mult + str(50)
     update_model(model, mult_type)
     test_loss, test_acc = evaluate_test_accuracy2(test_loader, model, device)
     print(f'Mult: {mult_type}, test loss:{test_loss}, final test acc:{test_acc}')
@@ -158,7 +158,7 @@ def evaluate_test_accuracy2(test_loader, model, device="cuda"):
             X, y = X.to(device), y.to(device)
             output = model(X)
             flat_tensor = output.view(-1)  # Flatten the tensor
-            print(flat_tensor)
+            #print(flat_tensor)
             # print(output.shape)
             # max_index = torch.argmax(output)
             # print(f"Index of max value: {max_index.item()}")

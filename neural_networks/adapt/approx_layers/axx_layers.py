@@ -181,8 +181,8 @@ class AdaPT_Conv2d(_ConvNd):
         #print(f'input adapt = {input.shape}')
         #print(f'input adapt = {input}')
         #print(f'input quant = {self.aq(input)}')
-        #print(f'weight = {weight[0,2,1,1].item()}')
-        #print(f'weight quant = {self.wq(weight)[0,2,1,1].item()}')
+        #print(f'weight = {weight[0,0,0,0].item()}')
+        #print(f'weight quant = {self.wq(weight)[0,0,0,0].item()}')
         return AdaPT_Conv2d_Function.apply(input, weight, self.kernel_size, self.out_channels, self.bias_, self.axx_conv2d_kernel, self.aq(input), self.wq(weight), bias, self.stride, self.padding, self.dilation, self.groups)
 
     def forward(self, input: Tensor) -> Tensor:

@@ -4,21 +4,24 @@ import torch.nn.functional as F
 from neural_networks.adapt.approx_layers import axx_layers
 from neural_networks.custom_layers import Conv2d, Linear, Act
 import pickle
+import numpy
 
 biasflag = False
 log = True
-torch.set_printoptions(threshold=float('inf'), precision=5, sci_mode=False)
+torch.set_printoptions(threshold=float('inf'), precision=16, sci_mode=False)
 conv_inputs_path = "conv_inputs.txt"
-conv_outputs_path = "conv_output.txt"
+conv_outputs_path = "gemmini_outputs.txt"
 
 class ResidualModule(nn.Module):
     ratio = 1
     bn_momentum = 0.1
-    
+    layer_index = 1
+
     def __init__(self, input_channels, output_channels, stride=1, mode=None):
         
         super(ResidualModule, self).__init__()
-        self.layer_index = 1
+
+        
         self.bn1 = nn.BatchNorm2d(input_channels, momentum=self.bn_momentum)
 
         if mode["execution_type"] == 'float':
@@ -71,17 +74,18 @@ class ResidualModule(nn.Module):
             return prex + x
 
     def forward(self, x):
-        conv_name = 'layer' + str(self.layer_index) + '.0.'
+        conv_name = 'layer' + str(ResidualModule.layer_index) + '.0.'
+        print(f'conv_name = {conv_name}')
         out = self.act1(self.bn1(x))
-        log_to_file(out, 'conv1 input', conv_inputs_path, conv_name + 'conv1')
+        log_to_file(out, f'static elem_t {conv_name}conv1_in<{out.shape[0]}><{out.shape[2]}><{out.shape[3]}><{out.shape[1]}> row_align(1)', conv_inputs_path, conv_name + 'conv1')
         out = self.conv1(out)
-        log_to_file(out, 'conv1 output', conv_outputs_path, conv_name + 'conv1')
+        log_output(out, conv_outputs_path, conv_name + 'conv1')
         out = self.act2(self.bn2(out))
-        log_to_file(out, 'conv2 input', conv_inputs_path, conv_name + 'conv2')
+        log_to_file(out, f'static elem_t {conv_name}conv2_in<{out.shape[0]}><{out.shape[2]}><{out.shape[3]}><{out.shape[1]}> row_align(1)', conv_inputs_path, conv_name + 'conv2')
         out = self.conv2(out)
-        log_to_file(out, 'conv2 output', conv_outputs_path, conv_name + 'conv2')
+        log_output(out, conv_outputs_path, conv_name + 'conv2')
         out = self.shortcut_identity(out, x) if hasattr(self, 'shortcut') else out + x
-        self.layer_index += 1
+        ResidualModule.layer_index += 1
         return out
 
 
@@ -124,34 +128,76 @@ class ResNet(nn.Module):
 
     def forward(self, x):
         init_log()
-        log_to_file(x, 'Initial input', conv_inputs_path, 'conv1')
-        log_to_file(x, 'Initial input', conv_inputs_path, 'conv1')
+        log_to_file(x, f'static elem_t conv1_in<{x.shape[0]}><{x.shape[2]}><{x.shape[3]}><{x.shape[1]}> row_align(1)', conv_inputs_path, 'conv1')
         out = self.conv1(x)
-        log_to_file(out, 'conv1 output', conv_outputs_path, 'conv1')
+        log_output(out, conv_outputs_path, 'conv1')
         out = self.layer1(out)
         out = self.layer2(out)
         out = self.layer3(out)
         out = self.act(self.bn(out))
         out = F.avg_pool2d(out, 8)
         out = self.flatten(out)
-        log_to_file(out, 'linear input', conv_inputs_path, 'linear')
+        log_to_file(out, f'static elem_t linear_in<{out.shape[0]}><{out.shape[1]}> row_align(1)', conv_inputs_path, 'linear')
         out = self.linear(out)
-        log_to_file(out, 'linear output', conv_outputs_path, 'linear')
+        log_output(out, conv_outputs_path, 'linear')
         return out
 
 
 def log_to_file(output, layer_name, filepath, conv_name):
     if log == True:
-        tensor_scaled = output
         if torch.is_tensor(output):
-            min_value = torch.min(output)
-            max_value = torch.max(output)
             scaling_factor = scale_to_int8(output, conv_name)
             #print(f'scaling_factor.type = {scaling_factor.type}')
             tensor_scaled = torch.clamp(torch.round(scaling_factor * output), min=-128, max=127).to(torch.int8)
-            tensor_scaled = tensor_scaled.permute(0, 2, 3, 1) #permute the dimensions to match the definition of inputs in conv_layer.c 
+            #print(f'tensor_scaled.dim = {tensor_scaled.dim()}')
+            #print(f'tensor_scaled.shape = {tensor_scaled.shape}')
+            if tensor_scaled.dim() == 4:
+                tensor_scaled = tensor_scaled.permute(0, 2, 3, 1) #permute the dimensions to match the definition of inputs in gemmini 
         with open(filepath, 'a') as f:
-            f.write(f'{layer_name} = {tensor_scaled}\n')
+            # Convert the tensor to a NumPy array for clean output
+            tensor_scaled = tensor_scaled.detach().cpu().numpy()  # Move to CPU and convert to NumPy
+            # Format the output as a string
+            tensor_scaled = tensor_scaled.tolist()  # Convert to list for better formatting
+            list_string = str(tensor_scaled).replace('\n', '').replace('  ', ' ')  # Replace newlines if any
+            list_string = list_string + ";"
+            f.write(f'{layer_name} = {list_string}\n')
+
+def log_output(output, filepath, conv_name):
+    if log == True:
+        tensor_scaled = output
+        if torch.is_tensor(output):
+            scaling_factor = scale_to_int8(output, conv_name)
+            #print(f'scaling_factor.type = {scaling_factor.type}')
+            tensor_scaled = torch.clamp(torch.round(scaling_factor * output), min=-128, max=127).to(torch.int8)
+            #print(f'tensor_scaled.dim = {tensor_scaled.dim()}')
+            #print(f'tensor_scaled.shape = {tensor_scaled.shape}')
+            if tensor_scaled.dim() == 4:
+                tensor_scaled = tensor_scaled.permute(0, 2, 3, 1) #permute the dimensions to match the definition of inputs in gemmini 
+            np_array = tensor_scaled.numpy()
+        with open(conv_outputs_path, 'a') as f:
+            if conv_name is not 'linear':
+                f.write("output_mat:\n")
+                for och in range(np_array.shape[0]):
+                    for wrow in range(np_array.shape[1]):
+                        for wcol in range(np_array.shape[2]):
+                            f.write("[")
+                            for ich in range(np_array.shape[3]):
+                                if ich == np_array.shape[3] - 1:
+                                    f.write(f"{np_array[och][wrow][wcol][ich]}")
+                                else:
+                                    f.write(f"{np_array[och][wrow][wcol][ich]},")
+                            f.write("]\n")
+                f.write("\n\n")
+            else:
+                f.write("output_mat:\n")
+                for orow in range(np_array.shape[0]):
+                    f.write("[")
+                    for ocol in range(np_array.shape[1]):
+                        if ocol == np_array.shape[1] - 1:
+                            f.write(f"{np_array[orow][ocol]}")
+                        else:
+                            f.write(f"{np_array[orow][ocol]},")
+                    f.write("]\n")
 
 
 def scale_to_int8(tensor, conv_name):
@@ -160,7 +206,6 @@ def scale_to_int8(tensor, conv_name):
         scaling_factors = pickle.load(f)
     
     # Move all scaling factors to CPU
-    #print(f'scaling_factors.keys = {scaling_factors.keys()}')
     for key, value in scaling_factors.items():
         if isinstance(value, torch.Tensor) and value.is_cuda:
             scaling_factors[key] = value.cpu()

@@ -19,8 +19,9 @@ print("------")
 #     print(f"{key} ({type(key)})")
 
 #print(f"epoch = {resnet['epoch']}")
-#print(f"layer1.0.bn1.bias = {resnet['model_state_dict']['layer1.0.bn1.bias']}")
-#print(f"layer1.0.conv1.weight = {resnet['model_state_dict']['layer1.0.conv1.weight'].shape}")
+#print(f"conv1.bias = {resnet['model_state_dict']['conv1.bias']}")
+print(f"layer1.0.bn1.bias = {resnet['model_state_dict']['layer1.0.bn1.bias']}")
+#print(f"layer1.0.conv1.weight = {resnet['model_state_dict']['layer1.0.conv1.weight'][0,0,0,0]}")
 # print(f"layer3.0.conv2.weight = {resnet['model_state_dict']['layer3.0.conv2.weight'].shape}")
 # print(f"train_loss = {resnet['train_loss']}")
 # print(f"train_acc = {resnet['train_acc']}")
@@ -28,6 +29,7 @@ print("------")
 # print(f"test_acc = {resnet['test_acc']}")
 # print(f"device = {resnet['device']}")
 # print(f"train_parameters = {resnet['train_parameters']}")
+#print(f"linear.weight = {resnet['model_state_dict']['linear.weight'].shape}")
 
 
 # key_to_find = 'weight'
