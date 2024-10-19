@@ -1,5 +1,6 @@
 import subprocess
 import shutil
+import os
 
 def remove_empty_lines_from_file(input_file):
     # Read the original file and filter out empty lines
@@ -59,6 +60,9 @@ input_files = ["gemmini_inputs.txt", "gemmini_weights.txt", "gemmini_biases.txt"
 # Output file where contents will be combined
 output_file = "conv_layer_params.h"
 directives = "#include <include/gemmini_params.h>\n#include <stdbool.h>\n\n"
+biases = "static acc_t conv_1_b = 0;\nstatic acc_t layer1_0_conv1_b = 0;\nstatic acc_t layer1_0_conv2_b = 0;\nstatic acc_t layer2_0_conv1_b = 0;\nstatic acc_t layer2_0_conv2_b = 0;\nstatic acc_t layer3_0_conv1_b = 0;\nstatic acc_t layer3_0_conv2_b = 0;\n"
+
+
 # Open the output file in write mode
 with open(output_file, "w") as outfile:
     outfile.write(directives)
@@ -67,6 +71,7 @@ with open(output_file, "w") as outfile:
         with open(file, "r") as infile:
             outfile.write(infile.read())
             outfile.write("\n")  # Add a newline between files to separate their contents
+    outfile.write(biases)
 
 print("Successfully created the header file needed for Gemmini")
 
@@ -80,4 +85,16 @@ destination_file = "/home/michael/chipyard/generators/gemmini/software/gemmini-r
 
 shutil.copy(source_file, destination_file)
 
-print("Header file copied to Gemmini directory")
+#Copy verified output of each conv layer to gemmini directory
+source_dir = 'verified_outputs'
+destination_dir = '/home/michael/chipyard/generators/gemmini/verified_outputs'
+
+# Remove the destination directory if it exists
+if os.path.exists(destination_dir):
+    shutil.rmtree(destination_dir)
+
+# Copy the directory and its contents
+shutil.copytree(source_dir, destination_dir)
+
+
+print("Header file and verified outputs copied to Gemmini directory")

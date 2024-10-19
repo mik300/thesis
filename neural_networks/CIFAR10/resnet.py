@@ -75,15 +75,17 @@ class ResidualModule(nn.Module):
 
     def forward(self, x):
         conv_name = 'layer' + str(ResidualModule.layer_index) + '.0.'
-        print(f'conv_name = {conv_name}')
+        #print(f'conv_name = {conv_name}')
         out = self.act1(self.bn1(x))
         log_to_file(out, f'static elem_t {conv_name}conv1_in<{out.shape[0]}><{out.shape[2]}><{out.shape[3]}><{out.shape[1]}> row_align(1)', conv_inputs_path, conv_name + 'conv1')
         out = self.conv1(out)
         log_output(out, conv_outputs_path, conv_name + 'conv1')
+        #print(f'conv1 out shape = {out.shape}')
         out = self.act2(self.bn2(out))
         log_to_file(out, f'static elem_t {conv_name}conv2_in<{out.shape[0]}><{out.shape[2]}><{out.shape[3]}><{out.shape[1]}> row_align(1)', conv_inputs_path, conv_name + 'conv2')
         out = self.conv2(out)
         log_output(out, conv_outputs_path, conv_name + 'conv2')
+        #print(f'conv2 out shape = {out.shape}')
         out = self.shortcut_identity(out, x) if hasattr(self, 'shortcut') else out + x
         ResidualModule.layer_index += 1
         return out
@@ -128,7 +130,7 @@ class ResNet(nn.Module):
 
     def forward(self, x):
         init_log()
-        log_to_file(x, f'static elem_t conv1_in<{x.shape[0]}><{x.shape[2]}><{x.shape[3]}><{x.shape[1]}> row_align(1)', conv_inputs_path, 'conv1')
+        log_to_file(x, f'static elem_t conv_1_in<{x.shape[0]}><{x.shape[2]}><{x.shape[3]}><{x.shape[1]}> row_align(1)', conv_inputs_path, 'conv1')
         out = self.conv1(x)
         log_output(out, conv_outputs_path, 'conv1')
         out = self.layer1(out)

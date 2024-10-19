@@ -46,7 +46,7 @@ t_max = torch.max(torch.abs(torch.min(weights)), torch.abs(torch.max(weights))).
 scaling_factor = 127/t_max
 quantized_weights = torch.clamp(torch.round(scaling_factor * weights), min=-128, max=127).to(torch.int8)
 quantized_weights = quantized_weights.permute(0, 2, 3, 1)
-log_weights(quantized_weights, f'static elem_t layer1_0_conv_1_w<{quantized_weights.shape[0]}><{quantized_weights.shape[1]}><{quantized_weights.shape[2]}><{quantized_weights.shape[3]}>')
+log_weights(quantized_weights, f'static elem_t layer1_0_conv1_w<{quantized_weights.shape[0]}><{quantized_weights.shape[1]}><{quantized_weights.shape[2]}><{quantized_weights.shape[3]}>')
 
 
 weights = model['model_state_dict']['layer1.0.conv2.weight']
@@ -54,7 +54,7 @@ t_max = torch.max(torch.abs(torch.min(weights)), torch.abs(torch.max(weights))).
 scaling_factor = 127/t_max
 quantized_weights = torch.clamp(torch.round(scaling_factor * weights), min=-128, max=127).to(torch.int8)
 quantized_weights = quantized_weights.permute(0, 2, 3, 1)
-log_weights(quantized_weights, f'static elem_t layer1_0_conv_2_w<{quantized_weights.shape[0]}><{quantized_weights.shape[1]}><{quantized_weights.shape[2]}><{quantized_weights.shape[3]}>')
+log_weights(quantized_weights, f'static elem_t layer1_0_conv2_w<{quantized_weights.shape[0]}><{quantized_weights.shape[1]}><{quantized_weights.shape[2]}><{quantized_weights.shape[3]}>')
 
 
 weights = model['model_state_dict']['layer2.0.conv1.weight']
@@ -62,7 +62,7 @@ t_max = torch.max(torch.abs(torch.min(weights)), torch.abs(torch.max(weights))).
 scaling_factor = 127/t_max
 quantized_weights = torch.clamp(torch.round(scaling_factor * weights), min=-128, max=127).to(torch.int8)
 quantized_weights = quantized_weights.permute(0, 2, 3, 1)
-log_weights(quantized_weights, f'static elem_t layer2_0_conv_1_w<{quantized_weights.shape[0]}><{quantized_weights.shape[1]}><{quantized_weights.shape[2]}><{quantized_weights.shape[3]}>')
+log_weights(quantized_weights, f'static elem_t layer2_0_conv1_w<{quantized_weights.shape[0]}><{quantized_weights.shape[1]}><{quantized_weights.shape[2]}><{quantized_weights.shape[3]}>')
 
 
 weights = model['model_state_dict']['layer2.0.conv2.weight']
@@ -70,7 +70,7 @@ t_max = torch.max(torch.abs(torch.min(weights)), torch.abs(torch.max(weights))).
 scaling_factor = 127/t_max
 quantized_weights = torch.clamp(torch.round(scaling_factor * weights), min=-128, max=127).to(torch.int8)
 quantized_weights = quantized_weights.permute(0, 2, 3, 1)
-log_weights(quantized_weights,  f'static elem_t layer2_0_conv_2_w<{quantized_weights.shape[0]}><{quantized_weights.shape[1]}><{quantized_weights.shape[2]}><{quantized_weights.shape[3]}>')
+log_weights(quantized_weights,  f'static elem_t layer2_0_conv2_w<{quantized_weights.shape[0]}><{quantized_weights.shape[1]}><{quantized_weights.shape[2]}><{quantized_weights.shape[3]}>')
 
 
 weights = model['model_state_dict']['layer3.0.conv1.weight']
@@ -78,7 +78,7 @@ t_max = torch.max(torch.abs(torch.min(weights)), torch.abs(torch.max(weights))).
 scaling_factor = 127/t_max
 quantized_weights = torch.clamp(torch.round(scaling_factor * weights), min=-128, max=127).to(torch.int8)
 quantized_weights = quantized_weights.permute(0, 2, 3, 1)
-log_weights(quantized_weights, f'static elem_t layer3_0_conv_1_w<{quantized_weights.shape[0]}><{quantized_weights.shape[1]}><{quantized_weights.shape[2]}><{quantized_weights.shape[3]}>')
+log_weights(quantized_weights, f'static elem_t layer3_0_conv1_w<{quantized_weights.shape[0]}><{quantized_weights.shape[1]}><{quantized_weights.shape[2]}><{quantized_weights.shape[3]}>')
 
 
 weights = model['model_state_dict']['layer3.0.conv2.weight']
@@ -86,7 +86,7 @@ t_max = torch.max(torch.abs(torch.min(weights)), torch.abs(torch.max(weights))).
 scaling_factor = 127/t_max
 quantized_weights = torch.clamp(torch.round(scaling_factor * weights), min=-128, max=127).to(torch.int8)
 quantized_weights = quantized_weights.permute(0, 2, 3, 1)
-log_weights(quantized_weights, f'static elem_t layer3_0_conv_2_w<{quantized_weights.shape[0]}><{quantized_weights.shape[1]}><{quantized_weights.shape[2]}><{quantized_weights.shape[3]}>')
+log_weights(quantized_weights, f'static elem_t layer3_0_conv2_w<{quantized_weights.shape[0]}><{quantized_weights.shape[1]}><{quantized_weights.shape[2]}><{quantized_weights.shape[3]}>')
 
 
 weights = model['model_state_dict']['linear.weight']

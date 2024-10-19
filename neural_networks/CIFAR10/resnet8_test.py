@@ -135,7 +135,7 @@ def main():
     filename_weights = model_dir + args.neural_network + namebit + namequant + "_quant_" + args.dataset + "_" + args.activation_function + '_weights.pkl'
 
 
-    mult_type = base_mult + str(50)
+    mult_type = base_mult + str(0)
     update_model(model, mult_type)
     test_loss, test_acc = evaluate_test_accuracy2(test_loader, model, device)
     print(f'Mult: {mult_type}, test loss:{test_loss}, final test acc:{test_acc}')
