@@ -93,13 +93,15 @@ def main():
      batch_size=args.batch_size, dataset_type=args.dataset, num_workers=args.num_workers,
      split_val=args.split_val, disable_aug=args.disable_aug, test_size = 1)
     
-
+    labels_path = 'labels.txt'
     num_images = len(test_loader.dataset)
     print(f"Number of images in the test set: {num_images}")
     for idx, (image, label) in enumerate(test_loader):
         print(f"Image {idx + 1}:")
         #print(f"Tensor:\n{image}")  # Print the image tensor
-        print(f"Label: {label.item()}")  # Print the label value
+        print(f"Label: {label.numpy()}")  # Print the label value
+        with open(labels_path, 'w') as f:
+            f.write(f'const int labels<{args.batch_size}> row_align(1) = {label.numpy()};\n')
         # min_value = torch.min(image)
         # max_value = torch.max(image)
         # tensor_scaled = ((image - min_value) / (max_value - min_value)) * 255

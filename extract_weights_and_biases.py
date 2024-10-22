@@ -104,7 +104,7 @@ biases = model['model_state_dict']['linear.bias']
 t_max = torch.max(torch.abs(torch.min(biases)), torch.abs(torch.max(biases))).item()
 scaling_factor = 127/t_max
 quantized_biases = torch.clamp(torch.round(scaling_factor * biases), min=-128, max=127).to(torch.int8)
-log_biases(quantized_biases, f'static elem_t linear_b<{quantized_biases.shape[0]}>')
+log_biases(quantized_biases, f'static acc_t linear_b<{quantized_biases.shape[0]}>')
 print("Biases have been scaled to int8 and saved to biases.txt")
 
 

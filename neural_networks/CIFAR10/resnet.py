@@ -10,7 +10,8 @@ biasflag = False
 log = True
 torch.set_printoptions(threshold=float('inf'), precision=16, sci_mode=False)
 conv_inputs_path = "conv_inputs.txt"
-conv_outputs_path = "gemmini_outputs.txt"
+conv_outputs_path = "conv_outputs.txt"
+conv_outputs_mat = "conv_output_mat.txt"
 
 class ResidualModule(nn.Module):
     ratio = 1
@@ -79,12 +80,14 @@ class ResidualModule(nn.Module):
         out = self.act1(self.bn1(x))
         log_to_file(out, f'static elem_t {conv_name}conv1_in<{out.shape[0]}><{out.shape[2]}><{out.shape[3]}><{out.shape[1]}> row_align(1)', conv_inputs_path, conv_name + 'conv1')
         out = self.conv1(out)
-        log_output(out, conv_outputs_path, conv_name + 'conv1')
+        log_to_file(out, f'static elem_t {conv_name}conv1_out<{out.shape[0]}><{out.shape[2]}><{out.shape[3]}><{out.shape[1]}> row_align(1)', conv_outputs_path, conv_name + 'conv1')
+        log_output(out, conv_outputs_mat, conv_name + 'conv1')
         #print(f'conv1 out shape = {out.shape}')
         out = self.act2(self.bn2(out))
         log_to_file(out, f'static elem_t {conv_name}conv2_in<{out.shape[0]}><{out.shape[2]}><{out.shape[3]}><{out.shape[1]}> row_align(1)', conv_inputs_path, conv_name + 'conv2')
         out = self.conv2(out)
-        log_output(out, conv_outputs_path, conv_name + 'conv2')
+        log_to_file(out, f'static elem_t {conv_name}conv2_out<{out.shape[0]}><{out.shape[2]}><{out.shape[3]}><{out.shape[1]}> row_align(1)', conv_outputs_path, conv_name + 'conv2')
+        log_output(out, conv_outputs_mat, conv_name + 'conv2')
         #print(f'conv2 out shape = {out.shape}')
         out = self.shortcut_identity(out, x) if hasattr(self, 'shortcut') else out + x
         ResidualModule.layer_index += 1
@@ -132,7 +135,8 @@ class ResNet(nn.Module):
         init_log()
         log_to_file(x, f'static elem_t conv_1_in<{x.shape[0]}><{x.shape[2]}><{x.shape[3]}><{x.shape[1]}> row_align(1)', conv_inputs_path, 'conv1')
         out = self.conv1(x)
-        log_output(out, conv_outputs_path, 'conv1')
+        log_to_file(out, f'static elem_t conv_1_out<{out.shape[0]}><{out.shape[2]}><{out.shape[3]}><{out.shape[1]}> row_align(1)', conv_outputs_path, 'conv1')
+        log_output(out, conv_outputs_mat, 'conv1')
         out = self.layer1(out)
         out = self.layer2(out)
         out = self.layer3(out)
@@ -141,7 +145,8 @@ class ResNet(nn.Module):
         out = self.flatten(out)
         log_to_file(out, f'static elem_t linear_in<{out.shape[0]}><{out.shape[1]}> row_align(1)', conv_inputs_path, 'linear')
         out = self.linear(out)
-        log_output(out, conv_outputs_path, 'linear')
+        log_to_file(out, f'static elem_t linear_out<{out.shape[0]}><{out.shape[1]}> row_align(1)', conv_outputs_path, 'linear')
+        log_output(out, conv_outputs_mat, 'linear')
         return out
 
 
@@ -176,8 +181,8 @@ def log_output(output, filepath, conv_name):
             if tensor_scaled.dim() == 4:
                 tensor_scaled = tensor_scaled.permute(0, 2, 3, 1) #permute the dimensions to match the definition of inputs in gemmini 
             np_array = tensor_scaled.numpy()
-        with open(conv_outputs_path, 'a') as f:
-            if conv_name is not 'linear':
+        with open(conv_outputs_mat, 'a') as f:
+            if conv_name != 'linear':
                 f.write("output_mat:\n")
                 for och in range(np_array.shape[0]):
                     for wrow in range(np_array.shape[1]):
@@ -200,6 +205,8 @@ def log_output(output, filepath, conv_name):
                         else:
                             f.write(f"{np_array[orow][ocol]},")
                     f.write("]\n")
+
+
 
 
 def scale_to_int8(tensor, conv_name):

@@ -28,3 +28,7 @@ read_scaling_factors.py
 read_weights.py
 golden_model_no_appr/*
 verified_outputs/*
+labels.txt
+gemmini_labels.txt
+conv_output_mat.txt
+conv_outputs.txt

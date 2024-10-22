@@ -1,7 +1,7 @@
 import os
 
 # Input and output directory
-input_file = "gemmini_outputs.txt"
+input_file = "conv_output_mat.txt"
 output_dir = "verified_outputs"
 
 # Create the output directory if it doesn't exist

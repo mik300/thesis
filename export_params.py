@@ -53,14 +53,22 @@ input_file = 'conv_inputs.txt'
 output_file = 'gemmini_inputs.txt'
 process_tensor_file(input_file, output_file)
 
+input_file = 'conv_outputs.txt'
+output_file = 'gemmini_outputs.txt'
+process_tensor_file(input_file, output_file)
+
+input_file = 'labels.txt'
+output_file = 'gemmini_labels.txt'
+process_tensor_file(input_file, output_file)
+
 
 # List of input files
-input_files = ["gemmini_inputs.txt", "gemmini_weights.txt", "gemmini_biases.txt"]
+input_files = ["gemmini_inputs.txt", "gemmini_weights.txt", "gemmini_outputs.txt","gemmini_biases.txt", "gemmini_labels.txt"]
 
 # Output file where contents will be combined
-output_file = "conv_layer_params.h"
-directives = "#include <include/gemmini_params.h>\n#include <stdbool.h>\n\n"
-biases = "static acc_t conv_1_b = 0;\nstatic acc_t layer1_0_conv1_b = 0;\nstatic acc_t layer1_0_conv2_b = 0;\nstatic acc_t layer2_0_conv1_b = 0;\nstatic acc_t layer2_0_conv2_b = 0;\nstatic acc_t layer3_0_conv1_b = 0;\nstatic acc_t layer3_0_conv2_b = 0;\n"
+output_file = "resnet8_params.h"
+directives = "#include \"gemmini_params.h\"\n#include <stdbool.h>\n\n"
+biases = "static acc_t* conv_1_b = 0;\nstatic acc_t* layer1_0_conv1_b = 0;\nstatic acc_t* layer1_0_conv2_b = 0;\nstatic acc_t* layer2_0_conv1_b = 0;\nstatic acc_t* layer2_0_conv2_b = 0;\nstatic acc_t* layer3_0_conv1_b = 0;\nstatic acc_t* layer3_0_conv2_b = 0;\n"
 
 
 # Open the output file in write mode
@@ -80,8 +88,8 @@ subprocess.run(["python3", "seperate_output_mat.py"])
 
 
 # Copy header file to Gemmini directory
-source_file = "conv_layer_params.h"
-destination_file = "/home/michael/chipyard/generators/gemmini/software/gemmini-rocc-tests/bareMetalC/conv_layer_params.h"
+source_file = "resnet8_params.h"
+destination_file = "/home/michael/chipyard/generators/gemmini/software/gemmini-rocc-tests/include/resnet8_params.h"
 
 shutil.copy(source_file, destination_file)
 
