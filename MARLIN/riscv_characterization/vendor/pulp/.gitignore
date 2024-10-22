@@ -1,0 +1,18 @@
+/.cached*
+/__pycache__*
+/ips
+/ipstools
+/sim/modelsim*
+/sim/ncompile/*
+!/sim/ncompile/build.mk
+/tests/*/
+/pulp-runtime
+/regression_tests
+
+# Bender
+/bender
+/.bender
+/sim/compile.tcl
+/sim/transcript
+/sim/work
+/working_dir
