@@ -1,5 +1,0 @@
-{
-    "description": "FPGA",
-
-    "runner_module": "runner.board.board_runner"
-}

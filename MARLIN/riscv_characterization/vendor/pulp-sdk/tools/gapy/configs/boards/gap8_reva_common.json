@@ -1,7 +1,0 @@
-{
-    "@include@": "boards/gap8_common.json",
-
-    "vsim": {
-        "path_envvar": "PULP_RTL_GAP8"
-    }
-}
