@@ -1,4 +1,4 @@
 [submodule "MARLIN"]
 	path = MARLIN
-	url = https://github.com/vlsi-lab/MARLIN.git
+	url = https://github.com/mik300/MARLIN.git
 
