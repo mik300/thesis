@@ -207,8 +207,6 @@ def log_output(output, filepath, conv_name):
                     f.write("]\n")
 
 
-
-
 def scale_to_int8(tensor, conv_name):
     filename_sc = './neural_networks/models/resnet8_a8_w8_b32_fake_quant_cifar10_ReLU_scaling_factors.pkl'
     with open(filename_sc, 'rb') as f:
@@ -225,6 +223,8 @@ def init_log():
     with open(conv_inputs_path, 'w') as f:
         f.write("")
     with open(conv_outputs_path, 'w') as f:
+        f.write("")
+    with open(conv_outputs_mat, 'w') as f:
         f.write("")
 
 def resnet8(mode=None):
