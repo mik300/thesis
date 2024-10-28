@@ -43,7 +43,12 @@ def get_args():
     parser.add_argument('--mutation-probability', default=0.8, type=float, help="Probability of gene mutation occurring on an individual")
     parser.add_argument('--axx-levels', default=255, type=int, help="Number of approximation levels supported by the multiplier, or number of LUT corresponding to different multipliers")
     parser.add_argument('--disable-aug', default=True, type=bool, help="Set to True to disable data augmentation to obtain deterministic results")
-
+    parser.add_argument('--execution_type', default='adapt', type=str, help="Leave it like this")
+    parser.add_argument('--act-bit', default=8, type=int, help="activation precision used for all layers")
+    parser.add_argument('--weight_bit', default=8, type=int, help="weight precision used for all layers")
+    parser.add_argument('--bias_bit', default=32, type=int, help="bias precision used for all layers")
+    parser.add_argument('--fake_quant', default=True, type=bool, help="Set to True to use fake quantization, set to False to use integer quantization")
+    parser.add_argument('--activation_function', default="ReLU", type=str, help="Activation function used for each act layer.")
     return parser.parse_args()
 
 
@@ -53,7 +58,7 @@ def main():
     train_args = {'epochs': params.epochs, 'lr_min': params.lr_min, 'lr_max': params.lr_max, 'batch': params.batch_size,
                   'weight_decay': params.weight_decay, 'num_workers': params.num_workers, 'lr_momentum': params.lr_momentum}
     model_name = "./neural_networks/models/" + params.neural_network + "_quant_baseline_model.pth"
-    scaling_factor_source = "./neural_networks/models/resnet8_a8_w8_b32_fake_quant_cifar10_ReLU_scaling_factors.pkl"
+    filename_sc = "./neural_networks/models/resnet8_a8_w8_b32_fake_quant_cifar10_ReLU_scaling_factors.pkl"
     torch.set_num_threads(params.threads)
 
     pkl_repo = './benchmark_CIFAR10/results_pkl/'
@@ -132,7 +137,9 @@ def main():
                                                                                 split_val=params.split_val,
                                                                                 disable_aug=params.disable_aug)
 
-    mode={"execution_type": "adapt", "fake_quant": True, "classes": 10, "act_bit": 8, "weight_bit": 8, "bias_bit": 32}
+    num_classes = 10
+    mode = {"execution_type":params.execution_type, "act_bit":params.act_bit, "weight_bit":params.weight_bit, "bias_bit":params.bias_bit, "fake_quant":params.fake_quant, "classes":num_classes, "act_type":params.activation_function}
+
     if params.neural_network == "resnet8":
         model = resnet8(mode)
     elif params.neural_network == "resnet14":
@@ -149,7 +156,8 @@ def main():
         model = adapt_mnist_net()
     else:
         exit("error unknown CNN model name")
-    #print(model)
+
+    load_scaling_factors(model, filename_sc, device = "cpu")
     checkpoint = torch.load(model_name, map_location='cpu')
     model.to('cpu')
     model.load_state_dict(checkpoint['model_state_dict'])
@@ -163,15 +171,14 @@ def main():
     print(n_appr_levels, n_levels)
     xl = 0  #lista di n_levels elementi, contiene il lower limit di ogni variabile,
     #sono n_levels moltiplicatori, quindi n_levels variabili con valori da 0 a 255
-    load_scaling_factors(model, scaling_factor_source, device = "cpu")
     mult_per_layer = GA_utils.list_mult_per_layer(model, imsize=imsize, axx_linear=params.axx_linear)
-
+    print(f'mult_per_layer = {mult_per_layer}') #mult_per_layer = [442368, 2359296, 2359296, 1179648, 2359296, 1179648, 2359296]
     power_list = GA_utils.mult_power_list(norm_power_file)
     max_power = GA_utils.max_power_net(mult_per_layer, power_list)
     # It is a bit slow since we collect histograms on CPU
 
     test_loss, test_acc = evaluate_test_accuracy(test_dataloader, model, device='cpu')
-    print(f'Baseline test accuracy: {test_acc}')
+    print(f'Baseline test accuracy: {test_acc}') 
     problem = ProblemWrapper(n_var=n_levels, n_obj=2, xl=xl, xu=params.axx_levels, vtype=int, mult_per_layer=mult_per_layer, power_list=power_list, max_power=max_power, model=model, max_acc=test_acc, current_gen=0, previous_designs_results={})
 
     algorithm = NSGA2(pop_size=params.population, sampling=IntegerRandomSampling(),

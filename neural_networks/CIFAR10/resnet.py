@@ -153,11 +153,8 @@ class ResNet(nn.Module):
 def log_to_file(output, layer_name, filepath, conv_name):
     if log == True:
         if torch.is_tensor(output):
-            scaling_factor = scale_to_int8(output, conv_name)
-            #print(f'scaling_factor.type = {scaling_factor.type}')
+            scaling_factor = scale_to_int8(conv_name)
             tensor_scaled = torch.clamp(torch.round(scaling_factor * output), min=-128, max=127).to(torch.int8)
-            #print(f'tensor_scaled.dim = {tensor_scaled.dim()}')
-            #print(f'tensor_scaled.shape = {tensor_scaled.shape}')
             if tensor_scaled.dim() == 4:
                 tensor_scaled = tensor_scaled.permute(0, 2, 3, 1) #permute the dimensions to match the definition of inputs in gemmini 
         with open(filepath, 'a') as f:
@@ -173,7 +170,7 @@ def log_output(output, filepath, conv_name):
     if log == True:
         tensor_scaled = output
         if torch.is_tensor(output):
-            scaling_factor = scale_to_int8(output, conv_name)
+            scaling_factor = scale_to_int8(conv_name)
             #print(f'scaling_factor.type = {scaling_factor.type}')
             tensor_scaled = torch.clamp(torch.round(scaling_factor * output), min=-128, max=127).to(torch.int8)
             #print(f'tensor_scaled.dim = {tensor_scaled.dim()}')
@@ -207,7 +204,7 @@ def log_output(output, filepath, conv_name):
                     f.write("]\n")
 
 
-def scale_to_int8(tensor, conv_name):
+def scale_to_int8(conv_name):
     filename_sc = './neural_networks/models/resnet8_a8_w8_b32_fake_quant_cifar10_ReLU_scaling_factors.pkl'
     with open(filename_sc, 'rb') as f:
         scaling_factors = pickle.load(f)
@@ -216,7 +213,7 @@ def scale_to_int8(tensor, conv_name):
     for key, value in scaling_factors.items():
         if isinstance(value, torch.Tensor) and value.is_cuda:
             scaling_factors[key] = value.cpu()
-    #print(f'conv_name = {conv_name}')
+    
     return scaling_factors[conv_name]
 
 def init_log():

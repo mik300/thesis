@@ -61,6 +61,7 @@ def list_mult_per_layer(model, imsize=(1,3,32,32), axx_linear=False):
     for name, module in model._modules.items():
         # if isinstance(module, nn.Conv2d) or isinstance(module, approxNN.AdaPT_Conv2d) or isinstance(module, nemo.quant.pact.PACT_Conv2d):
         if isinstance(module, nn.Conv2d) or isinstance(module, approxNN.AdaPT_Conv2d):
+            print(f'module = {module}')
             wgt = module.weight.shape
             act = module.data_shape
             mult = wgt[0] * wgt[1] * wgt[2] * wgt[3] * act[2] * act[3]
