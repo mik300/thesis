@@ -113,18 +113,27 @@ def main():
     save_weights(model, filename_weights)
     input_tensor = torch.randn(1,3,32,32).to(next(model.parameters()).device)
 
-    for i in range(1):
-        """ Use the same random input stimulus to obtain the intermediate input activations to each layer"""
-        update_model(model, base_mult + str(i))
-        filename_inputs = model_dir + args.neural_network + namebit + namequant + "_quant_" + args.dataset + "_" + args.activation_function + "_" + base_mult + str(i) + '_inputs.pkl'
-        save_activations(model, input_tensor, filename_inputs)
+    # for i in range(10):
+    #     """ Use the same random input stimulus to obtain the intermediate input activations to each layer"""
+    #     update_model(model, base_mult + str(i))
+    #     filename_inputs = model_dir + args.neural_network + namebit + namequant + "_quant_" + args.dataset + "_" + args.activation_function + "_" + base_mult + str(i) + '_inputs.pkl'
+    #     save_activations(model, input_tensor, filename_inputs)
 
-    for i in range(1):
-        mult_type = base_mult + str(i)
-        update_model(model, mult_type)
-        test_loss, test_acc = evaluate_test_accuracy(test_loader, model, device)
-        print(f'Mult: {mult_type}, test loss:{test_loss}, final test acc:{test_acc}')
+    # for i in range(10):
+    #     mult_type = base_mult + str(i)
+    #     update_model(model, mult_type)
+    #     test_loss, test_acc = evaluate_test_accuracy(test_loader, model, device)
+    #     print(f'Mult: {mult_type}, test loss:{test_loss}, final test acc:{test_acc}')
     
+    appr = 15
+    """ Use the same random input stimulus to obtain the intermediate input activations to each layer"""
+    update_model(model, base_mult + str(appr))
+    filename_inputs = model_dir + args.neural_network + namebit + namequant + "_quant_" + args.dataset + "_" + args.activation_function + "_" + base_mult + str(appr) + '_inputs.pkl'
+    save_activations(model, input_tensor, filename_inputs)
+    mult_type = base_mult + str(appr)
+    update_model(model, mult_type)
+    test_loss, test_acc = evaluate_test_accuracy(test_loader, model, device)
+    print(f'Mult: {mult_type}, test loss:{test_loss}, final test acc:{test_acc}')
     # mult_type = base_mult + str("i")
     # update_model(model, mult_type)
     # test_loss, test_acc = evaluate_test_accuracy(test_loader, model, device)

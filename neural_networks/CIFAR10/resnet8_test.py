@@ -59,6 +59,7 @@ def get_args():
     parser.add_argument('--continue_training', default=False, type=bool, help="Set to True to continue the training for a number of epochs that is the difference between the already trained epochs and the total epochs")
     parser.add_argument('--appr_level', default=0, type=int, help="Approximation level used in all layers (0 is exact)")
     parser.add_argument('--appr_level_list', type=int, nargs=8, help="Exactly 8 integers specifying levels of approximation for each layer")
+    parser.add_argument('--log', default=0, type=int, help="Set to 0 to print the parameters necessary for gemmini")
     return parser.parse_args()
 
 
@@ -74,8 +75,9 @@ def main():
         approximation_levels = args.appr_level_list
 
     labels_path = 'labels.txt'
-    with open(labels_path, 'w') as f:
-               f.write(f'const int appr_level<{len(approximation_levels)}> row_align(1) = {approximation_levels};\n')
+    if args.log == 1:
+        with open(labels_path, 'w') as f:
+                f.write(f'const int appr_level<{len(approximation_levels)}> row_align(1) = {approximation_levels};\n')
 
     device = "cpu"
     torch.set_num_threads(args.threads)
@@ -148,8 +150,7 @@ def main():
     model.load_state_dict(checkpoint['model_state_dict'], strict=True)
     model.to(device)
     model.eval()
-    load_scaling_factors(model, filename_sc,device)
-    filename_weights = model_dir + args.neural_network + namebit + namequant + "_quant_" + args.dataset + "_" + args.activation_function + '_weights.pkl'
+    load_scaling_factors(model, filename_sc, device)
 
 
     update_model(model, base_mult, approximation_levels)
@@ -179,8 +180,9 @@ def evaluate_test_accuracy2(test_loader, model, device="cuda"):
             # print(output.shape)
             # max_index = torch.argmax(output)
             # print(f"Index of max value: {max_index.item()}")
-            with open(labels_path, 'a') as f:
-               f.write(f'const int labels<{len(output.max(1)[1])}> row_align(1) = {output.max(1)[1].detach().tolist()};\n')
+            if args.log == 1:
+                with open(labels_path, 'a') as f:
+                f.write(f'const int labels<{len(output.max(1)[1])}> row_align(1) = {output.max(1)[1].detach().tolist()};\n')
             loss = F.cross_entropy(output, y)
             test_loss += loss.item() * y.size(0)
             test_acc += (output.max(1)[1] == y).sum().item()

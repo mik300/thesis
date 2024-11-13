@@ -2,3 +2,8 @@
 	path = MARLIN
 	url = https://github.com/mik300/MARLIN.git
 
+
+
+[submodule "fast_adversarial"]
+	path = fast_adversarial
+	url = https://github.com/mik300/fast_adversarial.git

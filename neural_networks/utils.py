@@ -68,7 +68,6 @@ def save_weights(model, filename='weight_tensors.pkl'):
 
 def save_scaling_factors(model, filename='scaling_factors.pkl'):
     scaling_factors = {}
-
     def process_module(module, path=''):
         for name, child in module.named_children():
             child_path = f"{path}.{name}" if path else name

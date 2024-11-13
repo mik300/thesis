@@ -7,7 +7,7 @@ import pickle
 import numpy
 
 biasflag = False
-log = True
+log = False
 torch.set_printoptions(threshold=float('inf'), precision=16, sci_mode=False)
 conv_inputs_path = "conv_inputs.txt"
 conv_outputs_path = "conv_outputs.txt"

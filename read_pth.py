@@ -10,17 +10,26 @@ import torch
 
 #print("Train Parameters:", checkpoint['train_parameters'])
 
-resnet = torch.load("neural_networks/models/resnet8_a8_w8_b32_fake_quant_cifar10_ReLU_calibrated.pth")
-print(resnet.keys())
+# resnet = torch.load("neural_networks/models/resnet8_a8_w8_b32_fake_quant_cifar10_ReLU_calibrated.pth")
+# print(resnet.keys())
+# print("------")
+
+at_resnet = torch.load("fast_adversarial/AT_models/AT_resnet8_fake_float_cifar10_ReLU_optO2_alpha10_epsilon8_5.pth")
+#print(at_resnet.keys())
+print("------")
+print(f"conv1.weight = {at_resnet['conv1.weight'][0,0,0,0]}")
+
+at_resnet = torch.load("fast_adversarial/AT_models/AT_resnet8_a8_w8_b32_fake_quant_cifar10_ReLU_optO2_alpha10_epsilon8_5.pth")
+#print(at_resnet.keys())
 print("------")
 
-
+print(f"conv1.weight = {at_resnet['conv1.weight'][0,0,0,0]}")
 # for key in resnet['model_state_dict'].keys():
 #     print(f"{key} ({type(key)})")
 
 #print(f"epoch = {resnet['epoch']}")
-#print(f"conv1.bias = {resnet['model_state_dict']['conv1.bias']}")
-print(f"layer1.0.bn1.bias = {resnet['model_state_dict']['layer1.0.bn1.bias']}")
+#print(f"conv1.weight = {resnet['model_state_dict']['conv1.weight'][0,0,0,0]}")
+#print(f"layer1.0.bn1.bias = {resnet['model_state_dict']['layer1.0.bn1.bias']}")
 #print(f"layer1.0.conv1.weight = {resnet['model_state_dict']['layer1.0.conv1.weight'][0,0,0,0]}")
 # print(f"layer3.0.conv2.weight = {resnet['model_state_dict']['layer3.0.conv2.weight'].shape}")
 # print(f"train_loss = {resnet['train_loss']}")
