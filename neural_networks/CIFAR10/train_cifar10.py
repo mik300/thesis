@@ -29,7 +29,7 @@ def get_args():
     parser.add_argument('--act-bit', default=8, type=int, help="activation precision used for all layers")
     parser.add_argument('--weight-bit', default=8, type=int, help="weight precision used for all layers")
     parser.add_argument('--bias-bit', default=32, type=int, help="bias precision used for all layers")
-    parser.add_argument('--fake_quant', default=1, type=int, help="Set to True to use fake quantization, set to False to use integer quantization")
+    parser.add_argument('--fake-quant', default=True, type=bool, help="Set to True to use fake quantization, set to False to use integer quantization")
     parser.add_argument('--neural-network', default="resnet8", type=str, help="Choose one from resnet8, resnet20, resnet32, resnet56")
     parser.add_argument('--execution-type', default='quant', type=str, help="Select type of neural network and precision. Options are: float, quant, adapt. \n float: the neural network is executed with floating point precision.\n quant: the neural network weight, bias and activations are quantized to 8 bit\n adapt: the neural network is quantized to 8 bit and processed with exact/approximate multipliers")
     parser.add_argument('--disable-aug', default=False, type=bool, help="Set to True to disable data augmentation to obtain deterministic results")
@@ -49,6 +49,7 @@ def main():
         torch.set_num_threads(args.threads)
     else:
         device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f'Device used: {device}')
 
     if args.dataset == "cifar10":
         num_classes = 10
@@ -63,10 +64,13 @@ def main():
     else:
         namebit = ""
 
-    if args.fake_quant:
-        namequant = "_fake"
+    if args.execution_type == "quant":
+        if args.fake_quant:
+            namequant = "_fake"
+        else:
+            namequant = "_int"
     else:
-        namequant = "_int"
+        namequant = ""
 
     filename = model_dir + args.neural_network + namebit + namequant + "_" + args.execution_type + "_" + args.dataset +"_" + args.activation_function + ".pth"
     filename_sc = model_dir + args.neural_network + namebit + namequant + "_" + args.execution_type + "_" + args.dataset +"_" + args.activation_function + '_scaling_factors.pkl'

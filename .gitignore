@@ -31,3 +31,4 @@ labels.txt
 gemmini_labels.txt
 conv_output_mat.txt
 conv_outputs.txt
+adversarial/adv_data/

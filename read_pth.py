@@ -10,20 +10,21 @@ import torch
 
 #print("Train Parameters:", checkpoint['train_parameters'])
 
-# resnet = torch.load("neural_networks/models/resnet8_a8_w8_b32_fake_quant_cifar10_ReLU_calibrated.pth")
+resnet = torch.load("neural_networks/models/resnet8_a8_w8_b32_fake_quant_cifar10_ReLU_calibrated.pth")
+print(resnet.keys())
+print("------")
+print(f"epoch = {resnet['epoch']}")
+
+# resnet = torch.load("./neural_networks/models/resnet8_fake_float_cifar10_ReLU.pth")
 # print(resnet.keys())
 # print("------")
+# print(f"epoch = {resnet['epoch']}")
 
-at_resnet = torch.load("fast_adversarial/AT_models/AT_resnet8_fake_float_cifar10_ReLU_optO2_alpha10_epsilon8_5.pth")
-#print(at_resnet.keys())
-print("------")
-print(f"conv1.weight = {at_resnet['conv1.weight'][0,0,0,0]}")
+# at_resnet = torch.load("fast_adversarial/AT_models/AT_resnet8_a8_w8_b32_fake_quant_cifar10_ReLU_optO2_alpha10_epsilon8_5.pth")
+# print(at_resnet.keys())
+# print("------")
 
-at_resnet = torch.load("fast_adversarial/AT_models/AT_resnet8_a8_w8_b32_fake_quant_cifar10_ReLU_optO2_alpha10_epsilon8_5.pth")
-#print(at_resnet.keys())
-print("------")
-
-print(f"conv1.weight = {at_resnet['conv1.weight'][0,0,0,0]}")
+#print(f"conv1.weight = {at_resnet['conv1.weight'][0,0,0,0]}")
 # for key in resnet['model_state_dict'].keys():
 #     print(f"{key} ({type(key)})")
 
