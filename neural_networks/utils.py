@@ -96,14 +96,14 @@ def load_scaling_factors(model, filename='scaling_factors.pkl', device="cuda"):
             if child_path in scaling_factors:
                 if hasattr(child, 'scaling_factor'):
                     child.update_act_scale(scaling_factors[child_path].to(device))
-                    print("DEBUG RELOADED SCALING FACTOR:  ", child_path)
+                    #print("DEBUG RELOADED SCALING FACTOR:  ", child_path)
                 else:
                     print(f"Warning: 'scaling_factor' attribute does not exist in {child_path}. Creating attribute.")
                     setattr(child, 'scaling_factor', scaling_factors[child_path])
             assign_scaling_factor(child, child_path)
 
     assign_scaling_factor(model)
-    print(f"Scaling factors loaded from {filename} and assigned to the model")
+    #print(f"Scaling factors loaded from {filename} and assigned to the model")
 
 def update_calibrator(in_module, name, calibrate, calibrator_status, override_calibration):
     done = False

@@ -8,6 +8,8 @@ from neural_networks.adapt.approx_layers.axx_layers import AdaPT_Conv2d
 from tqdm import tqdm
 import torch.nn.functional as F
 import torchattacks
+from adversarial.utils import get_attack
+import warnings
 
 #import matplotlib.pyplot as plt
 """
@@ -19,6 +21,7 @@ The code is organized as follows:
 3- performs a dummy run with a single random image 
 4- evaluates the test accuracy for each approximation level
 """
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 mult_index = 0
 def update_layer(in_module, name, mult_type):
@@ -42,28 +45,35 @@ def update_model(model, mult_base, appr_level_list):
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--activation_function', default="ReLU", type=str, help="Activation function used for each act layer.")
-    parser.add_argument('--batch_size', default=100, type=int, help="Number of images processed during each iteration")
-    parser.add_argument('--data_dir', default="./data/", type=str, help="Directory in which the MNIST and FASHIONMNIST dataset are stored or should be downloaded")
-    parser.add_argument('--AT', default=False, type=bool, help="Set to true to use Adversarially Trained (AT) models")
+    parser.add_argument('--activation-function', default="ReLU", type=str, help="Activation function used for each act layer.")
+    parser.add_argument('--batch-size', default=100, type=int, help="Number of images processed during each iteration")
+    parser.add_argument('--data-dir', default="./data/", type=str, help="Directory in which the MNIST and FASHIONMNIST dataset are stored or should be downloaded")
+    parser.add_argument('--adv-data-dir', default="./adversarial/adv_data/", type=str, help="Directory in which the adversarial data is stored")
     parser.add_argument('--dataset', default="cifar10", type=str, help="Select cifar10 or cifar100")
     parser.add_argument('--epochs', default=128, type=int, help="Number of training epochs")
-    parser.add_argument('--num_workers', default=0, type=int, help="Number of threads used during the preprocessing of the dataset")
+    parser.add_argument('--num-workers', default=0, type=int, help="Number of threads used during the preprocessing of the dataset")
     parser.add_argument('--threads', default=10, type=int, help="Number of threads used during the inference, used only when neural-network-type is set to adapt")
-    parser.add_argument('--split_val', default=0.1, type=float, help="The split-val is used to divide the training set in training and validation with the following dimensions: train=train_images*(1-split_val)  valid=train_images*split_val")
-    parser.add_argument('--act_bit', default=8, type=int, help="activation precision used for all layers")
-    parser.add_argument('--weight_bit', default=8, type=int, help="weight precision used for all layers")
-    parser.add_argument('--bias_bit', default=32, type=int, help="bias precision used for all layers")
-    parser.add_argument('--fake_quant', default=True, type=bool, help="Set to True to use fake quantization, set to False to use integer quantization")
-    parser.add_argument('--neural_network', default="resnet8", type=str, help="Choose one from resnet8, resnet20, resnet32, resnet56")
+    parser.add_argument('--split-val', default=0.1, type=float, help="The split-val is used to divide the training set in training and validation with the following dimensions: train=train_images*(1-split_val)  valid=train_images*split_val")
+    parser.add_argument('--act-bit', default=8, type=int, help="activation precision used for all layers")
+    parser.add_argument('--weight-bit', default=8, type=int, help="weight precision used for all layers")
+    parser.add_argument('--bias-bit', default=32, type=int, help="bias precision used for all layers")
+    parser.add_argument('--fake-quant', default=True, type=bool, help="Set to True to use fake quantization, set to False to use integer quantization")
+    parser.add_argument('--neural-network', default="resnet8", type=str, help="Choose one from resnet8, resnet20, resnet32, resnet56")
     parser.add_argument('--execution-type', default="quant", type=str, help="Leave it like this")
-    parser.add_argument('--disable_aug', default=False, type=bool, help="Set to True to disable data augmentation to obtain deterministic results")
+    parser.add_argument('--disable-aug', default=False, type=bool, help="Set to True to disable data augmentation to obtain deterministic results")
     parser.add_argument('--reload', default=True, type=bool, help="Set to True to reload a pretraind model, set to False to train a new one")
-    parser.add_argument('--continue_training', default=False, type=bool, help="Set to True to continue the training for a number of epochs that is the difference between the already trained epochs and the total epochs")
+    parser.add_argument('--continue-training', default=False, type=bool, help="Set to True to continue the training for a number of epochs that is the difference between the already trained epochs and the total epochs")
     parser.add_argument('--appr-level', default=0, type=int, help="Approximation level used in all layers (0 is exact)")
     parser.add_argument('--appr-level-list', type=int, nargs=8, help="Exactly 8 integers specifying levels of approximation for each layer")
     parser.add_argument('--log', default=0, type=int, help="Set to 0 to print the parameters necessary for gemmini")
-    parser.add_argument('--attack', default="PGD", type=int, help="Choose a type of attack from: PGD, FGSM, BIM, CW... The complete list can be found in the Supported Attacks section in the README file")
+    parser.add_argument('--nb-attacks', default=1, type=int, help="Specify number of attacks")
+
+    parser.add_argument('--opt-level', default='O2', type=str, choices=['O0', 'O1', 'O2'],
+        help='O0 is FP32 training, O1 is Mixed Precision, and O2 is "Almost FP16" Mixed Precision')
+    parser.add_argument('--AT', default=False, type=bool, help="Set to true to use Adversarially Trained (AT) models")
+    parser.add_argument('--AT-epsilon', default=8, type=int, help="This epsilon is unrelated to the attack; it's used to select the Adversarially Trained model")
+    parser.add_argument('--AT-alpha', default=10, type=float, help="This alpha is unrelated to the attack; it's used to select the Adversarially Trained model")
+    parser.add_argument('--AT-epochs', default=5, type=int, help="The number of epochs has no effect on this script; it used to select the Adversarially Trained model")
     return parser.parse_args()
 
 
@@ -73,6 +83,7 @@ def main():
     AT_model_dir = "./fast_adversarial/AT_models/"
     Path(model_dir).mkdir(parents=True, exist_ok=True)
     Path(args.data_dir).mkdir(parents=True, exist_ok=True)
+    Path(args.adv_data_dir).mkdir(parents=True, exist_ok=True)
 
     if args.appr_level_list is None:
         approximation_levels = [args.appr_level, args.appr_level, args.appr_level, args.appr_level, args.appr_level, args.appr_level, args.appr_level, args.appr_level]
@@ -94,22 +105,31 @@ def main():
     else:
         exit("Dataset not supported")
 
-    namebit = "_a"+str(args.act_bit)+"_w"+str(args.weight_bit)+"_b"+str(args.bias_bit)
-
-    if args.fake_quant:
-        namequant = "_fake"
+    if args.execution_type == "quant" or args.execution_type == "adapt":
+        execution_type = "quant"
+        namebit = "_a"+str(args.act_bit)+"_w"+str(args.weight_bit)+"_b"+str(args.bias_bit)
     else:
-        namequant = "_int"
+        execution_type = "float"
+        namebit = ""
+
+    if args.execution_type == "quant" or args.execution_type == "adapt":
+        if args.fake_quant:
+            namequant = "_fake"
+        else:
+            namequant = "_int"
+    else:
+        namequant = ""
 
     if args.AT == True:
-        filename = AT_model_dir + "AT_" + args.neural_network + namebit + namequant + "_" + args.execution_type + "_" + dataset + "_" + args.activation_function + "_opt" + args.opt_level + "_alpha" + str(args.alpha) +"_epsilon" + str(args.epsilon) + "_" + str(args.epochs) + ".pth"
+        filename = AT_model_dir + "AT_" + args.neural_network + namebit + namequant + "_" + execution_type + "_" + args.dataset + "_" + args.activation_function + "_opt" + args.opt_level + "_alpha" + str(args.AT_alpha) +"_epsilon" + str(args.AT_epsilon) + "_" + str(args.AT_epochs) + ".pth"
     else:
-        filename = model_dir + args.neural_network + namebit + namequant + "_" + args.execution_type + "_" + args.dataset + "_" + args.activation_function + "_calibrated.pth"
+        filename = model_dir + args.neural_network + namebit + namequant + "_" + execution_type + "_" + args.dataset + "_" + args.activation_function + "_calibrated.pth"
     
-    filename_sc = model_dir + args.neural_network + namebit + namequant + "_" + args.execution_type + "_" + args.dataset +"_" + args.activation_function + '_scaling_factors.pkl'
+    filename_sc = model_dir + args.neural_network + namebit + namequant + "_" + execution_type + "_" + args.dataset +"_" + args.activation_function + '_scaling_factors.pkl'
 
-    print(f'Model is sourced from: {filename}')
-    print(filename_sc)
+    print(f'Model parameters are loaded from {filename}')
+    if args.execution_type == "adapt":
+        print(f'Scaling factors loaded from {filename_sc} and assigned to the model')
 
     np.random.seed(0)
     torch.manual_seed(0)
@@ -132,37 +152,49 @@ def main():
         exit("error unknown CNN model name")
 
     print(f"Number of images in the test set: {len(valid_loader.dataset)}")
-    for idx, (images, labels) in enumerate(train_loader):
-        attack_type = args.  
-        # Dynamically get the attack class from torchattacks
-        AttackClass = getattr(torchattacks, attack_type)
-        atk = AttackClass(model, eps=8/255, alpha=2/255, steps=4)
-        #atk = torchattacks.PGD(model, eps=8/255, alpha=2/255, steps=4)
-        adv_images = atk(images, labels)
-
-    # Save
-    atk.save(train_loader, save_path=f"./adversarial_attacks/data.pt", verbose=True)
-    # Load
-    adv_loader = atk.load(load_path="./adversarial_attacks/data.pt")
-
-
     base_mult = "bw_mult_9_9_"
-    
-    print(f"model type = {type(model)}")
 
     checkpoint = torch.load(filename, map_location=device)
     model.load_state_dict(checkpoint['model_state_dict'], strict=True)
-    #model.load_state_dict(checkpoint, strict=True)
     model.to(device)
     model.eval()
-    load_scaling_factors(model, filename_sc, device)
-
-    
+    if args.execution_type == "adapt":
+        load_scaling_factors(model, filename_sc, device)
 
     update_model(model, base_mult, approximation_levels)
 
+    if args.nb_attacks == 1:
+        # Prompt attack type and parameters
+        attack_type, params = get_attack()
+
+        # Get the attack class dynamically and create the attack object
+        AttackClass = getattr(torchattacks, attack_type)
+        message = f'Executing {attack_type} attack with parameters: {params}'
+        atk = AttackClass(model, **params)  # Pass the params as keyword arguments
+
+        formatted_params = [f"{int(value)}" if isinstance(value, int) else f"{value:.3f}" for value in params.values()]
+        # Join them with underscores to form the suffix
+        attack_parameters = "_" + "_".join(formatted_params)
+    else:
+        attack_type_list = []
+        atk_list = []
+        for i in range(args.nb_attacks):
+            attack_type, params = get_attack()
+            attack_type_list.append(attack_type) #Used later to name the saved data 
+            AttackClass = getattr(torchattacks, attack_type)
+            atk_list.append(AttackClass(model, **params))
+            print("")
+        atk = torchattacks.MultiAttack(atk_list)
+        attack_type = "_".join(attack_type_list)
+        attack_parameters = ""
+        message = f'Executing a MultiAttack with the following attack types: {attack_type_list}'
+
+    adv_data_path = args.adv_data_dir + args.neural_network + namebit + namequant + "_" + execution_type + "_" + args.dataset + "_" + args.activation_function + "_" + attack_type + attack_parameters + ".pt"
+    adv_loader = atk.load(load_path=adv_data_path)
+
     #adv_loader test_loader
-    test_loss, test_acc = evaluate_test_accuracy(test_loader, model, args, device)
+    test_loss, test_acc = evaluate_test_accuracy(adv_loader, model, device)
+    print(message)
     print(f'Mult: {approximation_levels}, test loss:{test_loss}, final test acc:{test_acc}')
 
 if __name__ == "__main__":
