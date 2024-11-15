@@ -143,9 +143,7 @@ def main():
         print(f'Executing {atk}')
 
     
-    print(f"Generating and saving adversarial images for {args.dataset} ...")
-    # for idx, (images, labels) in enumerate(tqdm(test_loader)):
-    #     adv_images = atk(images.to(device), labels.to(device))
+    print(f"Generating and saving adversarial images for {args.dataset}...")
 
     if args.AT is True:
         AT_suffix = "AT_"

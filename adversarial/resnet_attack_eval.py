@@ -85,18 +85,18 @@ def main():
     Path(args.data_dir).mkdir(parents=True, exist_ok=True)
     Path(args.adv_data_dir).mkdir(parents=True, exist_ok=True)
 
+    if args.execution_type == 'adapt':
+        device = "cpu"
+        torch.set_num_threads(args.threads)
+    else:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f'Device used: {device}')
+
     if args.appr_level_list is None:
         approximation_levels = [args.appr_level, args.appr_level, args.appr_level, args.appr_level, args.appr_level, args.appr_level, args.appr_level, args.appr_level]
     else:
         approximation_levels = args.appr_level_list
 
-    labels_path = 'labels.txt'
-    if args.log == 1:
-        with open(labels_path, 'w') as f:
-                f.write(f'const int appr_level<{len(approximation_levels)}> row_align(1) = {approximation_levels};\n')
-
-    device = "cpu"
-    torch.set_num_threads(args.threads)
 
     if args.dataset == "cifar10":
         num_classes = 10
