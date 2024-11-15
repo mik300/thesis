@@ -32,3 +32,5 @@ gemmini_labels.txt
 conv_output_mat.txt
 conv_outputs.txt
 adversarial/adv_data/
+neural_networks/adapt/cpu-kernels-9x9/axx_mults_9x9/*
+neural_networks/adapt/cpu-kernels-8x8/axx_mults_8x8/*
