@@ -1,5 +1,6 @@
 import argparse
 import time
+import sys
 
 import numpy as np
 import torch
@@ -7,7 +8,9 @@ import torch.nn as nn
 from pathlib import Path
 from neural_networks.CIFAR10.resnet import resnet8, resnet20, resnet32, resnet56
 from neural_networks.utils import get_loaders_split, evaluate_test_accuracy, calibrate_model, load_scaling_factors, save_scaling_factors
+import warnings
 
+warnings.simplefilter(action='ignore', category=UserWarning)
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -59,12 +62,14 @@ def main():
     else:
         exit("Dataset not supported")
 
-    if args.execution_type == "quant":
+    if args.execution_type == "quant" or args.execution_type == "adapt":
+        execution_type = "quant"
         namebit = "_a"+str(args.act_bit)+"_w"+str(args.weight_bit)+"_b"+str(args.bias_bit)
     else:
+        execution_type = "float"
         namebit = ""
 
-    if args.execution_type == "quant":
+    if args.execution_type == "quant" or args.execution_type == "adapt":
         if args.fake_quant:
             namequant = "_fake"
         else:
@@ -72,11 +77,11 @@ def main():
     else:
         namequant = ""
 
-    filename = model_dir + args.neural_network + namebit + namequant + "_" + args.execution_type + "_" + args.dataset +"_" + args.activation_function + ".pth"
-    filename_sc = model_dir + args.neural_network + namebit + namequant + "_" + args.execution_type + "_" + args.dataset +"_" + args.activation_function + '_scaling_factors.pkl'
+    filename = model_dir + args.neural_network + namebit + namequant + "_" + execution_type + "_" + args.dataset +"_" + args.activation_function + ".pth"
+    filename_sc = model_dir + args.neural_network + namebit + namequant + "_" + execution_type + "_" + args.dataset +"_" + args.activation_function + '_scaling_factors.pkl'
 
-    print(filename)
-    print(filename_sc)
+    #print(filename)
+    #print(filename_sc)
 
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
@@ -172,8 +177,9 @@ def main():
 
             exit()
 
+    load_scaling_factors(model, filename_sc, device)
     model.train()
-
+    
     opt = torch.optim.SGD(model.parameters(), lr=args.lr_max, momentum=args.lr_momentum, weight_decay=args.weight_decay)
     criterion = nn.CrossEntropyLoss()
 
@@ -184,6 +190,8 @@ def main():
     elif args.lr_type == 'multistep':
         scheduler = torch.optim.lr_scheduler.MultiStepLR(opt, milestones=[lr_steps / 2, lr_steps * 3 / 4], gamma=0.1)
 
+    filename = model_dir + args.neural_network + namebit + namequant + "_" + args.execution_type + "_" + args.dataset +"_" + args.activation_function + ".pth"
+    print(f'Saving model to {filename}')
     best_test_acc = 0
     # Training
     for epoch in range(args.epochs):
@@ -193,12 +201,15 @@ def main():
         train_n = 0
         for i, (X, y) in enumerate(train_loader):
             X, y = X.to(device), y.to(device)
+            X.requires_grad = True
             output = model(X)
             loss = criterion(output, y)
             opt.zero_grad()
             loss.backward()
             opt.step()
             scheduler.step()
+            print(f'X.grad.shape = {X.grad.shape}')
+            sys.exit("Stop execution for debuggin")
             train_loss += loss.item() * y.size(0)
             train_acc += (output.max(1)[1] == y).sum().item()
             train_n += y.size(0)
