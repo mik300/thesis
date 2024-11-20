@@ -8,3 +8,6 @@ thesis_fw/neural_networks/models/** linguist-vendored
 data/** linguist-vendored
 fast_adversarial/AT_models/** linguist-vendored
 fast_adversarial/MNIST/models/** linguist-vendored
+*.c linguist-vendored
+*.h linguist-vendored
+*.cpp linguist-vendored
