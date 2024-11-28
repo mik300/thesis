@@ -11,6 +11,7 @@ from torchvision.models import efficientnet as ef
 import pickle
 from tqdm import tqdm
 from torch.utils.data import DataLoader, Subset
+import random
 
 def save_activations(model, input_tensor, filename="input_tensors.pkl"):
     input_tensors = {}
@@ -216,7 +217,7 @@ imagenet_mean = (0.485, 0.456, 0.406)
 imagenet_std=(0.229, 0.224, 0.225)
 
 
-def get_loaders_split(dir_, batch_size, dataset_type, num_workers=2, split_val=0.2, disable_aug=False, is_integer=False, test_size=None):
+def get_loaders_split(dir_, batch_size, dataset_type, num_workers=2, split_val=0.2, disable_aug=False, is_integer=False, test_size=None, resize_to_imagenet=False):
     """
     Generate train and test dataloaders
     @param dir_: string, directory in which the CIFAR-10 dataset is stored
@@ -235,10 +236,20 @@ def get_loaders_split(dir_, batch_size, dataset_type, num_workers=2, split_val=0
 
     if dataset_type == "cifar10":
         if disable_aug:
-            train_transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize(cifar10_mean, cifar10_std), transforms.Normalize(int_mean, 1)])
+            if resize_to_imagenet:
+                train_transform = transforms.Compose([transforms.Resize((227, 227)), transforms.ToTensor(), transforms.Normalize(cifar10_mean, cifar10_std), transforms.Normalize(int_mean, 1)])
+            else:
+                train_transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize(cifar10_mean, cifar10_std), transforms.Normalize(int_mean, 1)])
         else:
-            train_transform = transforms.Compose([transforms.RandomCrop(32, padding=4), transforms.RandomHorizontalFlip(), transforms.ToTensor(), transforms.Normalize(cifar10_mean, cifar10_std), transforms.Normalize(int_mean, 1)])
-        test_transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize(cifar10_mean, cifar10_std), transforms.Normalize(int_mean, 1)])
+            if resize_to_imagenet:
+                train_transform = transforms.Compose([transforms.RandomCrop(32, padding=4), transforms.Resize((227, 227)), transforms.RandomHorizontalFlip(), transforms.ToTensor(), transforms.Normalize(cifar10_mean, cifar10_std), transforms.Normalize(int_mean, 1)])
+            else:
+                train_transform = transforms.Compose([transforms.RandomCrop(32, padding=4), transforms.RandomHorizontalFlip(), transforms.ToTensor(), transforms.Normalize(cifar10_mean, cifar10_std), transforms.Normalize(int_mean, 1)])
+        if resize_to_imagenet:
+            test_transform = transforms.Compose([transforms.Resize((227, 227)), transforms.ToTensor(), transforms.Normalize(cifar10_mean, cifar10_std), transforms.Normalize(int_mean, 1)])
+        else:
+            test_transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize(cifar10_mean, cifar10_std), transforms.Normalize(int_mean, 1)])
+
         train_dataset = datasets.CIFAR10(dir_, train=True, transform=train_transform, download=True)
         val_dataset = datasets.CIFAR10(dir_, train=True, transform=test_transform, download=True)
         test_dataset = datasets.CIFAR10(dir_, train=False, transform=test_transform, download=True)
@@ -300,7 +311,9 @@ def get_loaders_split(dir_, batch_size, dataset_type, num_workers=2, split_val=0
         valid_sampler = SubsetRandomSampler(val_indices)
 
         if test_size is not None:
-            subset_indices = list(range(test_size))  # Selecting first 5 images
+            #subset_indices = [random.randint(0, len(test_dataset) - 1) for _ in range(test_size)] 
+            #print(f'subset_indices = {subset_indices}')
+            subset_indices = list(range(test_size))  # Selecting first 4 images
             test_dataset = Subset(test_dataset, subset_indices)
 
         train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=False, pin_memory=False, sampler=train_sampler, num_workers=num_workers)
