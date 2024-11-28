@@ -11,6 +11,7 @@ from neural_networks.utils import get_loaders_split, evaluate_test_accuracy, cal
 import warnings
 
 warnings.simplefilter(action='ignore', category=UserWarning)
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -19,8 +20,8 @@ def get_args():
     parser.add_argument('--data-dir', default="./data/", type=str, help="Directory in which the MNIST and FASHIONMNIST dataset are stored or should be downloaded")
     parser.add_argument('--dataset', default="imagenet", type=str, help="")
 
-    parser.add_argument('--epochs', default=128, type=int, help="Number of training epochs")
-    parser.add_argument('--lr-max', default=1e-1, type=float, help="Maximum learning rate for 'cyclic' scheduler, standard learning rate for 'flat' scheduler")
+    parser.add_argument('--epochs', default=20, type=int, help="Number of training epochs")
+    parser.add_argument('--lr-max', default=1e-2, type=float, help="Maximum learning rate for 'cyclic' scheduler, standard learning rate for 'flat' scheduler")
     parser.add_argument('--lr-min', default=1e-4, type=float, help="Minimum learning rate for 'cyclic' scheduler")
     parser.add_argument('--lr-type', default="multistep", type=str, help="Select learning rate scheduler, choose between 'cyclic' or 'multistep'")
     parser.add_argument('--weight-decay', default=5e-4, type=float, help="Weight decay applied during the optimization step")
@@ -54,11 +55,14 @@ def main():
         device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f'Device used: {device}')
 
-
-    if args.dataset == "imagenet":
+    if args.dataset == "cifar10":
+        num_classes = 10
+    elif args.dataset == "cifar100":
+        num_classes = 100
+    elif args.dataset == "imagenet":
         num_classes = 1000
-    else:
-        exit("Dataset not supported")
+    #else:
+        #exit("Dataset not supported")
 
 
     if args.execution_type == "quant" or args.execution_type == "adapt":
@@ -79,14 +83,15 @@ def main():
     filename = model_dir + args.neural_network + namebit + namequant + "_" + execution_type + "_" + args.dataset +"_" + args.activation_function + ".pth"
     filename_sc = model_dir + args.neural_network + namebit + namequant + "_" + execution_type + "_" + args.dataset +"_" + args.activation_function + '_scaling_factors.pkl'
 
-    #print(filename)
+    print(filename)
     #print(filename_sc)
 
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
 
-    train_loader, valid_loader, test_loader = get_loaders_split(args.data_dir, batch_size=args.batch_size, dataset_type=args.dataset, num_workers=args.num_workers, split_val=args.split_val, disable_aug=args.disable_aug)
+
+    train_loader, valid_loader, test_loader = get_loaders_split(args.data_dir, batch_size=args.batch_size, dataset_type=args.dataset, num_workers=args.num_workers, split_val=args.split_val, disable_aug=args.disable_aug, resize_to_imagenet=True)
 
     mode = {"execution_type":args.execution_type, "act_bit":args.act_bit, "weight_bit":args.weight_bit, "bias_bit":args.bias_bit, "fake_quant":args.fake_quant, "classes":num_classes, "act_type":args.activation_function}
 
@@ -147,14 +152,8 @@ def main():
             }, filename)
             model = None
 
-            if args.neural_network == "resnet8":
-                model = resnet8(mode).to(device)
-            elif args.neural_network == "resnet20":
-                model = resnet20(mode).to(device)
-            elif args.neural_network == "resnet32":
-                model = resnet32(mode).to(device)
-            elif args.neural_network == "resnet56":
-                model = resnet56(mode).to(device)
+            if args.neural_network == "alexnet":
+                model = alexnet(mode).to(device)
             else:
                 exit("error unknown CNN model name")
 
@@ -201,8 +200,6 @@ def main():
             loss.backward()
             opt.step()
             scheduler.step()
-            print(f'X.grad.shape = {X.grad.shape}')
-            sys.exit("Stop execution for debuggin")
             train_loss += loss.item() * y.size(0)
             train_acc += (output.max(1)[1] == y).sum().item()
             train_n += y.size(0)
@@ -228,12 +225,14 @@ def main():
         print(f'epoch:{epoch}, time:{epoch_time - start_epoch_time:.2f}, lr:{lr:.6f}, train loss:{train_loss / train_n:.4f}, train acc:{train_acc / train_n:.4f}, valid loss:{test_loss:.4f}, valid acc:{test_acc:.4f}')
 
 
-    # Evaluation
     if args.neural_network == "alexnet":
         model = alexnet(mode).to(device)
+    else:
+        exit("error unknown CNN model name")
 
-    model.load_state_dict(torch.load(filename, map_location='cpu')['model_state_dict'])
-    model.float()
+    print(f"model type = {type(model)}")
+    checkpoint = torch.load(filename, map_location=device)
+    model.load_state_dict(checkpoint['model_state_dict'], strict=True)
     model.to(device)
     model.eval()
     test_loss, test_acc = evaluate_test_accuracy(test_loader, model, device)

@@ -7,6 +7,10 @@ from neural_networks.utils import get_loaders_split, evaluate_test_accuracy, cal
 from neural_networks.adapt.approx_layers.axx_layers import AdaPT_Conv2d
 from tqdm import tqdm
 import torch.nn.functional as F
+import warnings
+
+warnings.simplefilter(action='ignore', category=UserWarning)
+warnings.simplefilter(action='ignore', category=FutureWarning)
 #import matplotlib.pyplot as plt
 """
 This python file can be used to test the performance of the ResNet neural networks with different approximate multiplier configurations.
@@ -106,17 +110,17 @@ def main():
     np.random.seed(0)
     torch.manual_seed(0)
     torch.cuda.manual_seed(0)
-
+    print(f'batch size = {args.batch_size}')
     train_loader, valid_loader, test_loader = get_loaders_split(args.data_dir,
      batch_size=args.batch_size, dataset_type=args.dataset, num_workers=args.num_workers,
      split_val=args.split_val, disable_aug=args.disable_aug, test_size = args.batch_size)
     
 
-    num_images = len(test_loader.dataset)
-    print(f"Number of images in the test set: {num_images}")
+
+    print(f"Number of images in the test set: {len(test_loader.dataset)}")
     for idx, (image, label) in enumerate(test_loader):
         print(f"Image {idx + 1}:")
-        #print(f"Tensor:\n{image}")  # Print the image tensor
+        print(f"Tensor shape: {image.shape}")  # Print the image tensor
         print(f"Verified labels: {label.numpy()}")  # Print the label value
         
         # min_value = torch.min(image)
@@ -131,7 +135,7 @@ def main():
         # plt.show()
 
 
-    mode= {"execution_type":args.execution_type, "act_bit":args.act_bit, "weight_bit":args.weight_bit, "bias_bit":args.bias_bit, "fake_quant":args.fake_quant, "classes":num_classes, "act_type":args.activation_function}
+    mode = {"execution_type":args.execution_type, "act_bit":args.act_bit, "weight_bit":args.weight_bit, "bias_bit":args.bias_bit, "fake_quant":args.fake_quant, "classes":num_classes, "act_type":args.activation_function}
 
     base_mult = "bw_mult_9_9_"
     

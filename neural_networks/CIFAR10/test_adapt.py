@@ -108,7 +108,7 @@ def main():
     model.load_state_dict(checkpoint['model_state_dict'], strict=True)
     model.to(device)
     model.eval()
-    load_scaling_factors(model, filename_sc,device)
+    load_scaling_factors(model, filename_sc, device)
     filename_weights = model_dir + args.neural_network + namebit + namequant + "_quant_" + args.dataset + "_" + args.activation_function + '_weights.pkl'
     save_weights(model, filename_weights)
     input_tensor = torch.randn(1,3,32,32).to(next(model.parameters()).device)
