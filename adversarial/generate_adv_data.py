@@ -3,7 +3,7 @@ import numpy as np
 import torch
 from pathlib import Path
 from neural_networks.CIFAR10.resnet import resnet8, resnet20, resnet32, resnet56
-from neural_networks.utils import get_loaders_split, evaluate_test_accuracy, calibrate_model, load_scaling_factors, save_scaling_factors, save_weights, save_activations
+from neural_networks.utils import get_loaders_split, evaluate_test_accuracy, calibrate_model, load_scaling_factors, save_scaling_factors, save_weights, save_activations, cifar10_mean, cifar10_std
 from neural_networks.adapt.approx_layers.axx_layers import AdaPT_Conv2d
 from adversarial.utils import get_attack
 from tqdm import tqdm
@@ -70,6 +70,7 @@ def main():
         execution_type = "quant"
         namebit = "_a"+str(args.act_bit)+"_w"+str(args.weight_bit)+"_b"+str(args.bias_bit)
     else:
+        execution_type = "float"
         namebit = ""
 
     if args.execution_type == "quant" or args.execution_type == "adapt":
@@ -85,10 +86,12 @@ def main():
     else:
         filename = model_dir + args.neural_network + namebit + namequant + "_" + execution_type + "_" + args.dataset + "_" + args.activation_function + "_calibrated.pth"
     
-    filename_sc = model_dir + args.neural_network + namebit + namequant + "_" + execution_type + "_" + args.dataset + "_" + args.activation_function + '_scaling_factors.pkl'
+    if args.execution_type == "quant" or args.execution_type == "adapt":
+        filename_sc = model_dir + args.neural_network + namebit + namequant + "_" + execution_type + "_" + args.dataset + "_" + args.activation_function + '_scaling_factors.pkl'
+        print(f'Scaling factors are loaded from: {filename_sc}')
 
     print(f'Model parameters are loaded from: {filename}')
-    print(f'Scaling factors are loaded from: {filename_sc}')
+    
 
     np.random.seed(0)
     torch.manual_seed(0)
@@ -113,8 +116,9 @@ def main():
     checkpoint = torch.load(filename, map_location=device)
 
     model.load_state_dict(checkpoint['model_state_dict'], strict=True)
-    load_scaling_factors(model, filename_sc, device)
-    print(f"Number of images in the test set: {len(test_loader.dataset)}")
+    if args.execution_type == "quant" or args.execution_type == "adapt":
+        load_scaling_factors(model, filename_sc, device)
+    print(f"Number of images in the test set: {len(train_loader.dataset)}")
 
     if args.nb_attacks == 1:
         # Prompt attack type and parameters
@@ -126,7 +130,7 @@ def main():
         print(f'Executing {atk}')
 
         formatted_params = [f"{int(value)}" if isinstance(value, int) else f"{value:.3f}" for value in params.values()]
-        # Join them with underscores to form the suffix
+        # Join parameters with underscores to form the suffix
         attack_parameters = "_" + "_".join(formatted_params)
     else:
         attack_type_list = []
@@ -142,7 +146,7 @@ def main():
         attack_parameters = ""
         print(f'Executing {atk}')
 
-    
+    atk.set_normalization_used(cifar10_mean, cifar10_std)
     print(f"Generating and saving adversarial images for {args.dataset}...")
 
     if args.AT is True:
@@ -150,7 +154,7 @@ def main():
     else:
         AT_suffix = ""
     adv_data_path = args.adv_data_dir + AT_suffix + args.neural_network + namebit + namequant + "_" + args.execution_type + "_" + args.dataset + "_" + args.activation_function + "_" + attack_type + attack_parameters + ".pt"
-    atk.save(test_loader, save_path=adv_data_path, verbose=True)
+    atk.save(train_loader, save_path=adv_data_path, verbose=True)
 
 if __name__ == "__main__":
     main()

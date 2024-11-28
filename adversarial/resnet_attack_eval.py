@@ -1,3 +1,4 @@
+import os
 import argparse
 import numpy as np
 import torch
@@ -10,6 +11,7 @@ import torch.nn.functional as F
 import torchattacks
 from adversarial.utils import get_attack
 import warnings
+
 
 #import matplotlib.pyplot as plt
 """
@@ -50,7 +52,6 @@ def get_args():
     parser.add_argument('--data-dir', default="./data/", type=str, help="Directory in which the MNIST and FASHIONMNIST dataset are stored or should be downloaded")
     parser.add_argument('--adv-data-dir', default="./adversarial/adv_data/", type=str, help="Directory in which the adversarial data is stored")
     parser.add_argument('--dataset', default="cifar10", type=str, help="Select cifar10 or cifar100")
-    parser.add_argument('--epochs', default=128, type=int, help="Number of training epochs")
     parser.add_argument('--num-workers', default=0, type=int, help="Number of threads used during the preprocessing of the dataset")
     parser.add_argument('--threads', default=10, type=int, help="Number of threads used during the inference, used only when neural-network-type is set to adapt")
     parser.add_argument('--split-val', default=0.1, type=float, help="The split-val is used to divide the training set in training and validation with the following dimensions: train=train_images*(1-split_val)  valid=train_images*split_val")
@@ -74,6 +75,13 @@ def get_args():
     parser.add_argument('--AT-epsilon', default=8, type=int, help="This epsilon is unrelated to the attack; it's used to select the Adversarially Trained model")
     parser.add_argument('--AT-alpha', default=10, type=float, help="This alpha is unrelated to the attack; it's used to select the Adversarially Trained model")
     parser.add_argument('--AT-epochs', default=5, type=int, help="The number of epochs has no effect on this script; it used to select the Adversarially Trained model")
+
+    parser.add_argument('--data-act-bit', type=int, help="")
+    parser.add_argument('--data-weight-bit', type=int, help="")
+    parser.add_argument('--data-bias-bit', type=int, help="")
+    parser.add_argument('--data-fake-quant', type=bool, help="")
+    parser.add_argument('--data-execution-type', type=str, help="")
+    parser.add_argument('--data-activation-function', type=str, help="")
     return parser.parse_args()
 
 
@@ -84,6 +92,25 @@ def main():
     Path(model_dir).mkdir(parents=True, exist_ok=True)
     Path(args.data_dir).mkdir(parents=True, exist_ok=True)
     Path(args.adv_data_dir).mkdir(parents=True, exist_ok=True)
+
+    if args.data_act_bit is None:
+        args.data_act_bit = args.act_bit
+
+    if args.data_weight_bit is None:
+        args.data_weight_bit = args.weight_bit
+
+    if args.data_bias_bit is None:
+        args.data_bias_bit = args.bias_bit
+
+    if args.data_fake_quant is None:
+        args.data_fake_quant = args.fake_quant
+
+    if args.data_execution_type is None:
+        args.execution_type = args.execution_type
+
+    if args.data_activation_function is None:
+        args.data_activation_function = args.activation_function
+    
 
     if args.execution_type == 'adapt':
         device = "cpu"
@@ -120,15 +147,32 @@ def main():
     else:
         namequant = ""
 
-    if args.AT == True:
-        filename = AT_model_dir + "AT_" + args.neural_network + namebit + namequant + "_" + execution_type + "_" + args.dataset + "_" + args.activation_function + "_opt" + args.opt_level + "_alpha" + str(args.AT_alpha) +"_epsilon" + str(args.AT_epsilon) + "_" + str(args.AT_epochs) + ".pth"
+    #Find the .pth file with the desired parameters
+    if args.data_execution_type == "quant" or args.data_execution_type == "adapt":
+        data_execution_type = "quant"
+        data_namebit = "_a"+str(args.act_bit)+"_w"+str(args.weight_bit)+"_b"+str(args.bias_bit)
     else:
-        filename = model_dir + args.neural_network + namebit + namequant + "_" + execution_type + "_" + args.dataset + "_" + args.activation_function + "_calibrated.pth"
+        data_execution_type = "float"
+        data_namebit = ""
+
+    if args.data_execution_type == "quant" or args.data_execution_type == "adapt":
+        if args.data_fake_quant:
+            data_namequant = "_fake"
+        else:
+            data_namequant = "_int"
+    else:
+        data_namequant = ""
+
+    if args.AT == True:
+        filename = AT_model_dir + "AT_" + args.neural_network + data_namebit + data_namequant + "_" + data_execution_type + "_" + args.dataset + "_" + args.data_activation_function + "_opt" + args.opt_level + "_alpha" + str(args.AT_alpha) +"_epsilon" + str(args.AT_epsilon) + "_" + str(args.AT_epochs) + ".pth"
+    else:
+        filename = model_dir + args.neural_network + data_namebit + data_namequant + "_" + data_execution_type + "_" + args.dataset + "_" + args.data_activation_function + "_calibrated.pth"
     
-    filename_sc = model_dir + args.neural_network + namebit + namequant + "_" + execution_type + "_" + args.dataset +"_" + args.activation_function + '_scaling_factors.pkl'
+    
 
     print(f'Model parameters are loaded from {filename}')
-    if args.execution_type == "adapt":
+    if args.execution_type == "quant" or args.execution_type == "adapt":
+        filename_sc = model_dir + args.neural_network + data_namebit + data_namequant + "_" + "quant" + "_" + args.dataset +"_" + args.data_activation_function + '_scaling_factors.pkl'
         print(f'Scaling factors loaded from {filename_sc} and assigned to the model')
 
     np.random.seed(0)
@@ -156,11 +200,11 @@ def main():
 
     checkpoint = torch.load(filename, map_location=device)
     model.load_state_dict(checkpoint['model_state_dict'], strict=True)
+    if args.execution_type == "quant" or args.execution_type == "adapt":
+        load_scaling_factors(model, filename_sc, device)
     model.to(device)
     model.eval()
-    if args.execution_type == "adapt":
-        load_scaling_factors(model, filename_sc, device)
-
+    
     update_model(model, base_mult, approximation_levels)
 
     if args.nb_attacks == 1:
@@ -189,7 +233,10 @@ def main():
         attack_parameters = ""
         message = f'Executing a MultiAttack with the following attack types: {attack_type_list}'
 
+    atk.set_normalization_used(cifar10_mean, cifar10_std)
     adv_data_path = args.adv_data_dir + args.neural_network + namebit + namequant + "_" + execution_type + "_" + args.dataset + "_" + args.activation_function + "_" + attack_type + attack_parameters + ".pt"
+    if not os.path.exists(adv_data_path):
+        raise FileNotFoundError(f"Error: '{adv_data_path}' not found. Run generated_adv_data.py to generate the required data.")
     adv_loader = atk.load(load_path=adv_data_path)
 
     #adv_loader test_loader
