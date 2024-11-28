@@ -11,3 +11,4 @@ fast_adversarial/MNIST/models/** linguist-vendored
 *.c linguist-vendored
 *.h linguist-vendored
 *.cpp linguist-vendored
+*.tex linguist-vendored

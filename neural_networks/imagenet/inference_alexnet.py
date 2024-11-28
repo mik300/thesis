@@ -10,6 +10,8 @@ from neural_networks.imagenet.alexnet import alexnet
 from neural_networks.utils import get_loaders_split, evaluate_test_accuracy, calibrate_model, load_scaling_factors, save_scaling_factors
 from neural_networks.adapt.approx_layers.axx_layers import AdaPT_Conv2d
 import warnings
+from tqdm import tqdm
+import torch.nn.functional as F
 
 warnings.simplefilter(action='ignore', category=UserWarning)
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -37,7 +39,7 @@ def update_model(model, mult_base, appr_level_list):
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--activation-function', default="ReLU", type=str, help="Activation function used for each act layer.")
-    parser.add_argument('--batch-size', default=100, type=int, help="Number of images processed during each iteration")
+    parser.add_argument('--batch-size', default=4, type=int, help="Number of images processed during each iteration")
     parser.add_argument('--data-dir', default="./data/", type=str, help="Directory in which the MNIST and FASHIONMNIST dataset are stored or should be downloaded")
     parser.add_argument('--dataset', default="cifar10", type=str, help="")
 
@@ -102,7 +104,7 @@ def main():
         namequant = ""
 
     #filename = model_dir + args.neural_network + namebit + namequant + "_" + execution_type + "_" + args.dataset +"_" + args.activation_function + "_epochs83.pth"
-    filename = "neural_networks/models/alexnet_float_cifar10_ReLU.pth"
+    filename = "neural_networks/models/alexnet_a8_w8_b32_fake_quant_cifar10_ReLU_calibrated.pth"
     filename_sc = model_dir + args.neural_network + namebit + namequant + "_" + execution_type + "_" + args.dataset +"_" + args.activation_function + '_scaling_factors.pkl'
 
     print(filename)
@@ -112,10 +114,12 @@ def main():
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
 
-
-    train_loader, valid_loader, test_loader = get_loaders_split(args.data_dir, batch_size=args.batch_size, dataset_type=args.dataset, num_workers=args.num_workers, split_val=args.split_val, disable_aug=args.disable_aug, resize_to_imagenet=True)
+    #train_loader, valid_loader, test_loader = get_loaders_split(args.data_dir, batch_size=args.batch_size, dataset_type=args.dataset, num_workers=args.num_workers, split_val=args.split_val, disable_aug=args.disable_aug, resize_to_imagenet=True)
+    train_loader, valid_loader, test_loader = get_loaders_split(args.data_dir, batch_size=args.batch_size, dataset_type=args.dataset, num_workers=args.num_workers, split_val=args.split_val, disable_aug=args.disable_aug, test_size = args.batch_size, resize_to_imagenet=True)
 
     print(f"Number of images in the test set: {len(test_loader.dataset)}")
+    # for idx, (image, label) in enumerate(test_loader):
+    #     print(f'image[0][0][0][0] = {image[0][0][0][0]}')
 
     mode = {"execution_type":args.execution_type, "act_bit":args.act_bit, "weight_bit":args.weight_bit, "bias_bit":args.bias_bit, "fake_quant":args.fake_quant, "classes":num_classes, "act_type":args.activation_function}
 
@@ -134,8 +138,33 @@ def main():
     
     base_mult = "bw_mult_9_9_"
     update_model(model, base_mult, approximation_levels)
-    test_loss, test_acc = evaluate_test_accuracy(test_loader, model, device)
+    test_loss, test_acc = evaluate_test_accuracy2(test_loader, model, device)
     print(f'Mult: {approximation_levels}, test loss:{test_loss}, final test acc:{test_acc}')
+
+def evaluate_test_accuracy2(test_loader, model, device="cuda"):
+    """
+    Evaluate the model top-1 accuracy using the dataloader passed as argument
+    @param test_loader: dataloader that contains the test images and ground truth, could be either the test or validation split
+    @param model: any torch.nn.Module with a final dense layer
+    @param device: use "cpu" for adapt with approximate models, "cuda" for GPU for float or quantized baseline models
+    @return: return the test loss and test accuracy as floating points values
+    """
+    test_loss = 0
+    test_acc = 0
+    n = 0
+    model.eval()
+    labels_path = 'labels.txt'
+    with torch.no_grad():
+        for i, (X, y) in enumerate(tqdm(test_loader)):
+            X, y = X.to(device), y.to(device)
+            output = model(X)
+            with open(labels_path, 'w') as f:
+                    f.write(f'const int labels<{len(output.max(1)[1])}> row_align(1) = {output.max(1)[1].detach().tolist()};\n')
+            loss = F.cross_entropy(output, y)
+            test_loss += loss.item() * y.size(0)
+            test_acc += (output.max(1)[1] == y).sum().item()
+            n += y.size(0)
+    return test_loss/n, test_acc/n
 
 if __name__ == "__main__":
     main()

@@ -38,5 +38,13 @@ data/cifar-10-batches-py/
 data/cifar-100-python/
 data/dataset/
 data/cifar-100-python.tar.gz
-alexnet_biases.txt
-alexnet_weights.txt
+alexnet_params.txt
+alexnet_params.h
+alexnet_w_b.h
+alexnet_conv_inputs.txt
+alexnet_conv_output_mat.txt
+alexnet_conv_outputs.txt
+images.txt
+images.h
+matrix.txt
+populate_alexnet.py
