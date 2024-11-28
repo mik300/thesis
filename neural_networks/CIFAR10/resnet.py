@@ -37,7 +37,7 @@ class ResidualModule(nn.Module):
         else:
             exit("unknown layer command")
 
-        self.act1 = Act(act_bit=8, fake_quant=mode['fake_quant'], scaling_factor=None, calibrate=False)
+        self.act1 = Act(act_bit=mode['act_bit'], fake_quant=mode['fake_quant'], scaling_factor=None, calibrate=False)
 
         self.bn2 = nn.BatchNorm2d(output_channels, momentum=self.bn_momentum)
 
@@ -54,7 +54,7 @@ class ResidualModule(nn.Module):
         else:
             exit("unknown layer command")
 
-        self.act2 = Act(act_bit=8, fake_quant=mode['fake_quant'], scaling_factor=None, calibrate=False)
+        self.act2 = Act(act_bit=mode['act_bit'], fake_quant=mode['fake_quant'], scaling_factor=None, calibrate=False)
 
         self.downsample = nn.AvgPool2d(kernel_size=1, stride=2)
         if stride != 1 or input_channels != self.ratio * output_channels:
@@ -97,6 +97,7 @@ class ResidualModule(nn.Module):
 class ResNet(nn.Module):
     def __init__(self, res_block, num_res_blocks, num_classes=10, mode=None):
         super(ResNet, self).__init__()
+        print(f'mode = {mode}')
         self.input_channels = 16
         self.bn_momentum = 0.1
         if mode["execution_type"] == 'float':
@@ -109,7 +110,7 @@ class ResNet(nn.Module):
         else:
             exit("unknown layer command")
         
-        self.act = Act(act_bit=8, fake_quant=mode['fake_quant'], scaling_factor=None, calibrate=False)
+        self.act = Act(act_bit=mode['act_bit'], fake_quant=mode['fake_quant'], scaling_factor=None, calibrate=False)
 
         self.layer1 = self._make_res(res_block, 16, num_res_blocks[0], stride=1, mode=mode)
         self.layer2 = self._make_res(res_block, 32, num_res_blocks[1], stride=2, mode=mode)
