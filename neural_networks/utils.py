@@ -13,6 +13,11 @@ from tqdm import tqdm
 from torch.utils.data import DataLoader, Subset
 import random
 
+from transaxx.classification.utils import *
+from transaxx.layers.adapt_convolution_layer import AdaptConv2D
+from transaxx.classification.ptflops import get_model_complexity_info
+from transaxx.classification.ptflops.pytorch_ops import conv_flops_counter_hook
+
 def save_activations(model, input_tensor, filename="input_tensors.pkl"):
     input_tensors = {}
     def get_inputs(module_name):
@@ -237,15 +242,18 @@ def get_loaders_split(dir_, batch_size, dataset_type, num_workers=2, split_val=0
     if dataset_type == "cifar10":
         if disable_aug:
             if resize_to_imagenet:
+                print(f'Resizing for imagenet')
                 train_transform = transforms.Compose([transforms.Resize((227, 227)), transforms.ToTensor(), transforms.Normalize(cifar10_mean, cifar10_std), transforms.Normalize(int_mean, 1)])
             else:
                 train_transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize(cifar10_mean, cifar10_std), transforms.Normalize(int_mean, 1)])
         else:
             if resize_to_imagenet:
+                print(f'Resizing for imagenet')
                 train_transform = transforms.Compose([transforms.RandomCrop(32, padding=4), transforms.Resize((227, 227)), transforms.RandomHorizontalFlip(), transforms.ToTensor(), transforms.Normalize(cifar10_mean, cifar10_std), transforms.Normalize(int_mean, 1)])
             else:
                 train_transform = transforms.Compose([transforms.RandomCrop(32, padding=4), transforms.RandomHorizontalFlip(), transforms.ToTensor(), transforms.Normalize(cifar10_mean, cifar10_std), transforms.Normalize(int_mean, 1)])
         if resize_to_imagenet:
+            print(f'Resizing for imagenet')
             test_transform = transforms.Compose([transforms.Resize((227, 227)), transforms.ToTensor(), transforms.Normalize(cifar10_mean, cifar10_std), transforms.Normalize(int_mean, 1)])
         else:
             test_transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize(cifar10_mean, cifar10_std), transforms.Normalize(int_mean, 1)])
@@ -324,3 +332,87 @@ def get_loaders_split(dir_, batch_size, dataset_type, num_workers=2, split_val=0
 
     return train_loader, valid_loader, test_loader
 
+
+def init_transaxx(model, approximation_levels, args, quant_bits=8, device='cuda', fake_quant=False):
+    conv2d_layers = [(name, module) for name, module in model.named_modules() if (isinstance(module, torch.nn.Conv2d) or isinstance(module, AdaptConv2D)) and ("head" not in name and "reduction" not in name)]
+    print(f'Number of conv layer is {len(conv2d_layers)}')
+    axx_list = [{'axx_mult' : f'bw_mult_{quant_bits}_{quant_bits}_0', 'axx_power' : 1.0, 'quant_bits' : quant_bits, 'fake_quant' : False}]*len(conv2d_layers)
+    if len(conv2d_layers) != len(approximation_levels):
+        # Calculate how many elements need to be added
+        num_elements_to_add = len(conv2d_layers) - len(approximation_levels)
+        # If the length of conv2d_layers is greater, add 0s to approximation_levels
+        approximation_levels.extend([0] * num_elements_to_add)
+
+    for i in range(len(approximation_levels)):
+        axx_list[i:i+1] = [{'axx_mult' : f'bw_mult_{quant_bits}_{quant_bits}_{approximation_levels[i]}', 'axx_power' : 0.7082, 'quant_bits' : 8, 'fake_quant' : False}] * 1
+
+    start = time.time()
+    replace_conv_layers(model, AdaptConv2D, axx_list, 0, 0, layer_count=[0], returned_power = [0], initialize = True)  
+    print('Time to compile cuda extensions: ', time.time()-start)
+
+    with torch.cuda.device(0):
+        total_macs, total_params, layer_specs = get_model_complexity_info(model, (3, 32, 32),as_strings=False, print_per_layer_stat=True,
+                                                            custom_modules_hooks={AdaptConv2D : conv_flops_counter_hook}, 
+                                                            param_units='M', flops_units='MMac',
+                                                            verbose=True)
+    print(f'Computational complexity:  {total_macs/1000000:.2f} MMacs')
+    print(f'Number of parameters::  {total_params/1000000:.2f} MParams')     
+
+    _, calib_data = cifar10_data_loader(data_path="./data/", batch_size=args.batch_size)
+    with torch.no_grad():
+        stats = collect_stats(model, calib_data, num_batches=2, device=device)
+        amax = compute_amax(model, method="percentile", percentile=99.99, device=device) 
+
+    for i in range(len(conv2d_layers)):
+        axx_list[i:i+1] = [{'axx_mult' : f'bw_mult_{quant_bits}_{quant_bits}_{approximation_levels[i]}', 'axx_power' : 0.7082, 'quant_bits' : quant_bits, 'fake_quant' : fake_quant}] * 1
+    #axx_list[0:len(conv2d_layers)] = [{'axx_mult' : f'bw_mult_{quant_bits}_{quant_bits}_{appr_level}', 'axx_power' : 0.7082, 'quant_bits' : quant_bits, 'fake_quant' : fake_quant}] * len(conv2d_layers)
+    returned_power = [0]
+    print(f"axx_list size = {len(axx_list)}")
+    print(f"conv2d_layers size = {len(conv2d_layers)}")
+    i = 0
+    for axx in axx_list:
+        print(f"{conv2d_layers[i][0]}: {axx['axx_mult']}")
+        i += 1
+    replace_conv_layers(model,  AdaptConv2D, axx_list, total_macs, total_params, layer_count=[0], returned_power = returned_power, initialize = False) 
+
+
+    # linear_layers = [(name, module) for name, module in model.named_modules() if (isinstance(module, torch.nn.linear) or isinstance(module, AdaPT_Linear)) and ("head" not in name and "reduction" not in name)]
+    # print(f'Number of linear layer is {len(linear_layers)}')
+    # axx_list = [{'axx_mult' : f'bw_mult_{quant_bits}_{quant_bits}_0', 'axx_power' : 1.0, 'quant_bits' : quant_bits, 'fake_quant' : False}]*len(linear_layers)
+    # if len(linear_layers) != len(approximation_levels):
+    #     # Calculate how many elements need to be added
+    #     num_elements_to_add = len(linear_layers) - len(approximation_levels)
+    #     # If the length of linear_layers is greater, add 0s to approximation_levels
+    #     approximation_levels.extend([0] * num_elements_to_add)
+
+    # for i in range(len(approximation_levels)):
+    #     axx_list[i:i+1] = [{'axx_mult' : f'bw_mult_{quant_bits}_{quant_bits}_{approximation_levels[i]}', 'axx_power' : 0.7082, 'quant_bits' : 8, 'fake_quant' : False}] * 1
+
+    # start = time.time()
+    # replace_conv_layers(model,  AdaPT_Linear, axx_list, 0, 0, layer_count=[0], returned_power = [0], initialize = True)  
+    # print('Time to compile cuda extensions: ', time.time()-start)
+
+    # with torch.cuda.device(0):
+    #     total_macs, total_params, layer_specs = get_model_complexity_info(model, (3, 32, 32),as_strings=False, print_per_layer_stat=True,
+    #                                                         custom_modules_hooks={AdaPT_Linear : conv_flops_counter_hook}, 
+    #                                                         param_units='M', flops_units='MMac',
+    #                                                         verbose=True)
+    # print(f'Computational complexity:  {total_macs/1000000:.2f} MMacs')
+    # print(f'Number of parameters::  {total_params/1000000:.2f} MParams')     
+
+    # _, calib_data = cifar10_data_loader(data_path="./data/", batch_size=args.batch_size)
+    # with torch.no_grad():
+    #     stats = collect_stats(model, calib_data, num_batches=2, device=device)
+    #     amax = compute_amax(model, method="percentile", percentile=99.99, device=device) 
+
+    # for i in range(len(linear_layers)):
+    #     axx_list[i:i+1] = [{'axx_mult' : f'bw_mult_{quant_bits}_{quant_bits}_{approximation_levels[i]}', 'axx_power' : 0.7082, 'quant_bits' : quant_bits, 'fake_quant' : fake_quant}] * 1
+    # #axx_list[0:len(linear_layers)] = [{'axx_mult' : f'bw_mult_{quant_bits}_{quant_bits}_{appr_level}', 'axx_power' : 0.7082, 'quant_bits' : quant_bits, 'fake_quant' : fake_quant}] * len(linear_layers)
+    # returned_power = [0]
+    # print(f"axx_list size = {len(axx_list)}")
+    # print(f"linear_layers size = {len(linear_layers)}")
+    # i = 0
+    # for axx in axx_list:
+    #     print(f"{linear_layers[i][0]}: {axx['axx_mult']}")
+    #     i += 1
+    # replace_linear_layers(model, AdaPT_Linear, axx_list, total_macs, total_params, layer_count=[0], returned_power = returned_power, initialize = False) 
