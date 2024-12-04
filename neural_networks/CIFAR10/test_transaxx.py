@@ -3,7 +3,7 @@ import numpy as np
 import torch
 from pathlib import Path
 from neural_networks.CIFAR10.resnet import resnet8, resnet20, resnet32, resnet56
-from neural_networks.utils import get_loaders_split, evaluate_test_accuracy, calibrate_model, load_scaling_factors, save_scaling_factors, save_weights, save_activations
+from neural_networks.utils import set_model_axx_levels, init_transaxx, get_loaders_split, evaluate_test_accuracy, calibrate_model, load_scaling_factors, save_scaling_factors, save_weights, save_activations
 from neural_networks.adapt.approx_layers.axx_layers import AdaPT_Conv2d
 from transaxx.classification.utils import *
 from transaxx.layers.adapt_convolution_layer import AdaptConv2D
@@ -26,26 +26,6 @@ The code is organized as follows:
 4- evaluates the test accuracy for each approximation level
 """
 
-mult_index = 0
-def update_layer(in_module, name, mult_type):
-    global mult_index
-    new_module = False
-    if isinstance(in_module, AdaPT_Conv2d):
-        print(f'mult_type = {mult_type}')
-        new_module = True
-        in_module.axx_mult = mult_type
-        in_module.update_kernel()
-        mult_index += 1
-    return new_module
-
-def update_model(model, mult_base, appr_level_list):
-    global mult_index
-    for name, module in model.named_children():
-        mult_type = mult_base + str(appr_level_list[mult_index])
-        new_module = update_layer(module, name, mult_type)
-        if not new_module:
-            update_model(module, mult_base, appr_level_list)
-
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--activation_function', default="ReLU", type=str, help="Activation function used for each act layer.")
@@ -61,13 +41,18 @@ def get_args():
     parser.add_argument('--bias-bit', default=32, type=int, help="bias precision used for all layers")
     parser.add_argument('--fake-quant', default=True, type=bool, help="Set to True to use fake quantization, set to False to use integer quantization")
     parser.add_argument('--neural-network', default="resnet8", type=str, help="Choose one from resnet8, resnet20, resnet32, resnet56")
-    parser.add_argument('--execution-type', default='adapt', type=str, help="Leave it like this")
+    parser.add_argument('--execution-type', default='transaxx', type=str, help="Leave it like this")
     parser.add_argument('--disable-aug', default=False, type=bool, help="Set to True to disable data augmentation to obtain deterministic results")
     parser.add_argument('--reload', default=True, type=bool, help="Set to True to reload a pretraind model, set to False to train a new one")
     parser.add_argument('--continue-training', default=False, type=bool, help="Set to True to continue the training for a number of epochs that is the difference between the already trained epochs and the total epochs")
-    parser.add_argument('--appr-level', default=0, type=int, help="Approximation level used in all layers (0 is exact)")
-    parser.add_argument('--appr-level-list', type=int, nargs=8, help="Exactly 8 integers specifying levels of approximation for each layer")
+    parser.add_argument('--conv-axx-level', default=0, type=int, help="Approximation level used in all layers (0 is exact)")
+    parser.add_argument('--conv-axx-level-list', type=int, nargs='+', help="List of integers specifying levels of approximation for each convolutional layer")
+    parser.add_argument('--linear-axx-level', default=0, type=int, help="Approximation level used in all layers (0 is exact)")
+    parser.add_argument('--linear-axx-level-list', type=int, nargs='+', help="List of integers specifying levels of approximation for each convolutional layer")
     parser.add_argument('--log', default=0, type=int, help="Set to 0 to print the parameters necessary for gemmini")
+
+    parser.add_argument('--transaxx-quant', default=8, type=int, help="")
+    parser.add_argument('--data-execution-type', default='quant', type=str, help="")
     return parser.parse_args()
 
 
@@ -77,17 +62,13 @@ def main():
     Path(model_dir).mkdir(parents=True, exist_ok=True)
     Path(args.data_dir).mkdir(parents=True, exist_ok=True)
 
-    if args.appr_level_list is None:
-        approximation_levels = [args.appr_level, args.appr_level, args.appr_level, args.appr_level, args.appr_level, args.appr_level, args.appr_level, args.appr_level]
-    else:
-        approximation_levels = args.appr_level_list
-
+    
     labels_path = 'labels.txt'
     if args.log == 1:
         with open(labels_path, 'w') as f:
-                f.write(f'const int appr_level<{len(approximation_levels)}> row_align(1) = {approximation_levels};\n')
+                f.write(f'const int appr_level<{len(conv_axx_levels)}> row_align(1) = {conv_axx_levels};\n')
 
-    device = "cuda"
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     torch.set_num_threads(args.threads)
 
     if args.dataset == "cifar10":
@@ -97,25 +78,39 @@ def main():
     else:
         exit("Dataset not supported")
 
-    namebit = "_a"+str(args.act_bit)+"_w"+str(args.weight_bit)+"_b"+str(args.bias_bit)
 
-    if args.fake_quant:
-        namequant = "_fake"
+    if args.data_execution_type == "quant":
+        execution_type = "quant"
+        namebit = "_a"+str(args.act_bit)+"_w"+str(args.weight_bit)+"_b"+str(args.bias_bit)
     else:
-        namequant = "_int"
+        if args.data_execution_type == "float":
+            execution_type = "float"
+            namebit = ""
+        else:
+            execution_type = "transaxx"
+            namebit = f"_{args.transaxx_quant}x{args.transaxx_quant}"
+        
+
+    if args.execution_type == "quant" or args.execution_type == "transaxx":
+        if args.fake_quant:
+            namequant = "_fake"
+        else:
+            namequant = "_int"
+    else:
+        namequant = ""
 
 
-    filename = model_dir + args.neural_network + namebit + namequant + "_quant_" + args.dataset + "_" + args.activation_function + "_calibrated.pth"
-    filename_sc = model_dir + args.neural_network + namebit + namequant + "_quant_" + args.dataset +"_" + args.activation_function + '_scaling_factors.pkl'
-
-    print(filename_sc)
-
+    filename = model_dir + args.neural_network + namebit + namequant + f"_{args.data_execution_type}_" + args.dataset + "_" + args.activation_function + ".pth"
+    print(f'Loading model parameters from {filename}')
     np.random.seed(0)
     torch.manual_seed(0)
     torch.cuda.manual_seed(0)
     print(f'batch size = {args.batch_size}')
     
-    val_data, calib_data = cifar10_data_loader(data_path="./data/", batch_size=128)
+    #val_data, calib_data = cifar10_data_loader(data_path="./data/", batch_size=128)
+    _, val_data, _ = get_loaders_split(args.data_dir,
+     batch_size=args.batch_size, dataset_type=args.dataset, num_workers=args.num_workers,
+     split_val=args.split_val, disable_aug=args.disable_aug)
 
     print(f"Number of images in the test set: {len(val_data.dataset)}")
 
@@ -133,35 +128,24 @@ def main():
         model = resnet56(mode).to(device)
     else:
         exit("error unknown CNN model name")
-    print(f"model type = {type(model)}")
-    checkpoint = torch.load(filename, map_location=device)
-    model.load_state_dict(checkpoint['model_state_dict'], strict=True)
+
+    conv_axx_levels, linear_axx_levels = set_model_axx_levels(model, args.conv_axx_level_list, args.conv_axx_level, args.linear_axx_level_list, args.linear_axx_level)
+
+    if args.data_execution_type == "transaxx":
+        init_transaxx(model, conv_axx_levels, linear_axx_levels, args, args.transaxx_quant, device, fake_quant=False)
+        checkpoint = torch.load(filename, map_location=device)
+        model.load_state_dict(checkpoint['model_state_dict'], strict=True)
+    else:
+        checkpoint = torch.load(filename, map_location=device)
+        model.load_state_dict(checkpoint['model_state_dict'], strict=True)
+        if args.execution_type == "transaxx":
+            init_transaxx(model, conv_axx_levels, linear_axx_levels, args, args.transaxx_quant, device, fake_quant=False)
+
     model.to(device)
     model.eval()
 
-    conv2d_layers = [(name, module) for name, module in model.named_modules() if (isinstance(module, torch.nn.Conv2d) or isinstance(module, AdaptConv2D) or isinstance(module, AdaPT_Conv2d)) and ("head" not in name and "reduction" not in name)]
-    axx_list = [{'axx_mult' : 'mul8s_acc', 'axx_power' : 1.0, 'quant_bits' : 8, 'fake_quant' : False}]*len(conv2d_layers)
-    axx_list[3:4] = [{'axx_mult' : 'bw_mult_9_9_0', 'axx_power' : 0.7082, 'quant_bits' : 8, 'fake_quant' : False}] * 1
-    start = time.time()
-    replace_conv_layers(model,  AdaptConv2D, axx_list, 0, 0, layer_count=[0], returned_power = [0], initialize = True)  
-    print('Time to compile cuda extensions: ', time.time()-start)
-
-    with torch.cuda.device(0):
-        total_macs, total_params, layer_specs = get_model_complexity_info(model, (3, 32, 32),as_strings=False, print_per_layer_stat=True,
-                                                            custom_modules_hooks={AdaptConv2D : conv_flops_counter_hook}, 
-                                                            param_units='M', flops_units='MMac',
-                                                            verbose=True)
-
-    with torch.no_grad():
-        stats = collect_stats(model, calib_data, num_batches=2, device=device)
-        amax = compute_amax(model, method="percentile", percentile=99.99, device=device) 
-    
-    axx_list[0:len(conv2d_layers)] = [{'axx_mult' : 'bw_mult_9_9_50', 'axx_power' : 0.7082, 'quant_bits' : 9, 'fake_quant' : False}] * len(conv2d_layers)
-    returned_power = [0]
-    replace_conv_layers(model,  AdaptConv2D, axx_list, total_macs, total_params, layer_count=[0], returned_power = returned_power, initialize = False)  
-
     test_loss, test_acc = evaluate_test_accuracy(val_data, model, device)
-    print(f'Mult: {approximation_levels}, test loss:{test_loss}, final test acc:{test_acc}')
+    print(f'Mult: {conv_axx_levels}, {linear_axx_levels} | test loss:{test_loss:.5f} | final test acc:{test_acc:.5f}')
 
 if __name__ == "__main__":
     main()
