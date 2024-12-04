@@ -7,7 +7,12 @@ import torch
 import torch.nn as nn
 from pathlib import Path
 from neural_networks.CIFAR10.resnet import resnet8, resnet20, resnet32, resnet56
-from neural_networks.utils import get_loaders_split, evaluate_test_accuracy, calibrate_model, load_scaling_factors, save_scaling_factors
+from neural_networks.utils import init_transaxx_train, init_transaxx, get_loaders_split, evaluate_test_accuracy, calibrate_model, load_scaling_factors, save_scaling_factors
+from neural_networks.adapt.approx_layers.axx_layers import AdaPT_Conv2d
+from transaxx.classification.utils import *
+from transaxx.layers.adapt_convolution_layer import AdaptConv2D
+from transaxx.classification.ptflops import get_model_complexity_info
+from transaxx.classification.ptflops.pytorch_ops import conv_flops_counter_hook
 import warnings
 
 warnings.simplefilter(action='ignore', category=UserWarning)
@@ -15,12 +20,12 @@ warnings.simplefilter(action='ignore', category=UserWarning)
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--activation-function', default="ReLU", type=str, help="Activation function used for each act layer.")
-    parser.add_argument('--batch-size', default=100, type=int, help="Number of images processed during each iteration")
+    parser.add_argument('--batch-size', default=128, type=int, help="Number of images processed during each iteration")
     parser.add_argument('--data-dir', default="./data/", type=str, help="Directory in which the MNIST and FASHIONMNIST dataset are stored or should be downloaded")
     parser.add_argument('--dataset', default="cifar10", type=str, help="Select cifar10 or cifar100")
 
     parser.add_argument('--epochs', default=128, type=int, help="Number of training epochs")
-    parser.add_argument('--lr-max', default=1e-1, type=float, help="Maximum learning rate for 'cyclic' scheduler, standard learning rate for 'flat' scheduler")
+    parser.add_argument('--lr-max', default=1e-2, type=float, help="Maximum learning rate for 'cyclic' scheduler, standard learning rate for 'flat' scheduler")
     parser.add_argument('--lr-min', default=1e-4, type=float, help="Minimum learning rate for 'cyclic' scheduler")
     parser.add_argument('--lr-type', default="multistep", type=str, help="Select learning rate scheduler, choose between 'cyclic' or 'multistep'")
     parser.add_argument('--weight-decay', default=5e-4, type=float, help="Weight decay applied during the optimization step")
@@ -38,6 +43,7 @@ def get_args():
     parser.add_argument('--disable-aug', default=False, type=bool, help="Set to True to disable data augmentation to obtain deterministic results")
     parser.add_argument('--reload', default=False, type=bool, help="Set to True to reload a pretraind model, set to False to train a new one")
     parser.add_argument('--continue-training', default=False, type=bool, help="Set to True to continue the training for a number of epochs that is the difference between the already trained epochs and the total epochs")
+    parser.add_argument('--transaxx-quant', default=8, type=int, help="")
     return parser.parse_args()
 
 
@@ -47,29 +53,30 @@ def main():
     Path(model_dir).mkdir(parents=True, exist_ok=True)
     Path(args.data_dir).mkdir(parents=True, exist_ok=True)
 
-    if args.execution_type == 'adapt':
-        device = "cpu"
-        torch.set_num_threads(args.threads)
-    else:
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f'Device used: {device}')
 
     if args.dataset == "cifar10":
         num_classes = 10
-
     elif args.dataset == "cifar100":
         num_classes = 100
     else:
         exit("Dataset not supported")
 
-    if args.execution_type == "quant" or args.execution_type == "adapt":
+    if args.execution_type == "quant":
         execution_type = "quant"
         namebit = "_a"+str(args.act_bit)+"_w"+str(args.weight_bit)+"_b"+str(args.bias_bit)
     else:
-        execution_type = "float"
-        namebit = ""
+        if args.execution_type == "float":
+            execution_type = "float"
+            namebit = ""
+        else:
+            execution_type = "transaxx"
+            namebit = f"_{args.transaxx_quant}x{args.transaxx_quant}"
+        
 
-    if args.execution_type == "quant" or args.execution_type == "adapt":
+    if args.execution_type == "quant" or args.execution_type == "transaxx":
         if args.fake_quant:
             namequant = "_fake"
         else:
@@ -88,8 +95,9 @@ def main():
     torch.cuda.manual_seed(args.seed)
 
     train_loader, valid_loader, test_loader = get_loaders_split(args.data_dir, batch_size=args.batch_size, dataset_type=args.dataset, num_workers=args.num_workers, split_val=args.split_val, disable_aug=args.disable_aug)
+    _, calib_data = cifar10_data_loader(data_path="./data/", batch_size=args.batch_size)
 
-    mode= {"execution_type":args.execution_type, "act_bit":args.act_bit, "weight_bit":args.weight_bit, "bias_bit":args.bias_bit, "fake_quant":args.fake_quant, "classes":num_classes, "act_type":args.activation_function}
+    mode = {"execution_type":args.execution_type, "act_bit":args.act_bit, "weight_bit":args.weight_bit, "bias_bit":args.bias_bit, "fake_quant":args.fake_quant, "classes":num_classes, "act_type":args.activation_function}
 
     if args.neural_network == "resnet8":
         model = resnet8(mode).to(device)
@@ -102,6 +110,10 @@ def main():
     else:
         exit("error unknown CNN model name")
     print(f"args.reload = {args.reload}")
+
+    if execution_type == "transaxx":
+       init_transaxx_train(model, [0], args, args.transaxx_quant, device, False)
+
     if args.reload:
         checkpoint = torch.load(filename, map_location=device)
         model.load_state_dict(checkpoint['model_state_dict'], strict=False)
@@ -177,11 +189,11 @@ def main():
 
             exit()
 
-    load_scaling_factors(model, filename_sc, device)
+    #load_scaling_factors(model, filename_sc, device)
     model.train()
     
+    criterion = nn.CrossEntropyLoss().to(device)
     opt = torch.optim.SGD(model.parameters(), lr=args.lr_max, momentum=args.lr_momentum, weight_decay=args.weight_decay)
-    criterion = nn.CrossEntropyLoss()
 
     lr_steps = args.epochs * len(train_loader)
     if args.lr_type == 'cyclic':
@@ -189,9 +201,16 @@ def main():
                                                       step_size_up=lr_steps / 2, step_size_down=lr_steps / 2)
     elif args.lr_type == 'multistep':
         scheduler = torch.optim.lr_scheduler.MultiStepLR(opt, milestones=[lr_steps / 2, lr_steps * 3 / 4], gamma=0.1)
+    elif args.lr_type == 'step':
+        opt = torch.optim.SGD(model.parameters(), lr=0.1)
+        scheduler = torch.optim.lr_scheduler.StepLR(opt, step_size=1, gamma=0.5)
 
     filename = model_dir + args.neural_network + namebit + namequant + "_" + args.execution_type + "_" + args.dataset +"_" + args.activation_function + ".pth"
     print(f'Saving model to {filename}')
+    print(model)
+    print(f'Training on dataset with {len(train_loader.dataset)} images')
+    _, test_acc = evaluate_test_accuracy(valid_loader, model, device)
+    print(f'Initial accuracy: {test_acc}')
     best_test_acc = 0
     # Training
     for epoch in range(args.epochs):
@@ -201,18 +220,20 @@ def main():
         train_n = 0
         for i, (X, y) in enumerate(train_loader):
             X, y = X.to(device), y.to(device)
-            X.requires_grad = True
+            #X.requires_grad = True
             output = model(X)
             loss = criterion(output, y)
             opt.zero_grad()
             loss.backward()
             opt.step()
-            scheduler.step()
-            print(f'X.grad.shape = {X.grad.shape}')
-            sys.exit("Stop execution for debuggin")
+            if args.lr_type != 'step':
+                scheduler.step()
+            #print(f'X.grad.shape = {X.grad.shape}')
             train_loss += loss.item() * y.size(0)
             train_acc += (output.max(1)[1] == y).sum().item()
             train_n += y.size(0)
+        if args.lr_type == 'step':
+            scheduler.step()
         epoch_time = time.time()
         lr = scheduler.get_lr()[0]
         model.eval()
@@ -244,10 +265,16 @@ def main():
         model = resnet32(mode).to(device)
     elif args.neural_network == "resnet56":
         model = resnet56(mode).to(device)
-    model.load_state_dict(torch.load(filename, map_location='cpu')['model_state_dict'])
+
+    if execution_type == "transaxx":
+        init_transaxx_train(model, [0], args, args.transaxx_quant, device, False)
+
+    model.load_state_dict(torch.load(filename, map_location=device)['model_state_dict'])
     model.float()
     model.to(device)
     model.eval()
+
+    
     test_loss, test_acc = evaluate_test_accuracy(test_loader, model, device)
     print(f'Pre-calibration | test loss:{test_loss}, test acc:{test_acc}')
     calibrate_model(model, train_loader, device)
