@@ -3,7 +3,7 @@ import numpy as np
 import torch
 from pathlib import Path
 from neural_networks.CIFAR10.resnet import resnet8, resnet20, resnet32, resnet56
-from neural_networks.utils import get_loaders_split, evaluate_test_accuracy, calibrate_model, load_scaling_factors, save_scaling_factors, save_weights, save_activations, cifar10_mean, cifar10_std
+from neural_networks.utils import *
 from neural_networks.adapt.approx_layers.axx_layers import AdaPT_Conv2d
 from adversarial.utils import get_attack
 from tqdm import tqdm
@@ -41,6 +41,20 @@ def get_args():
     parser.add_argument('--AT-epsilon', default=8, type=int, help="This epsilon is unrelated to the attack; it's used to select the Adversarially Trained model")
     parser.add_argument('--AT-alpha', default=10, type=float, help="This alpha is unrelated to the attack; it's used to select the Adversarially Trained model")
     parser.add_argument('--AT-epochs', default=5, type=int, help="The number of epochs has no effect on this script; it used to select the Adversarially Trained model")
+
+    parser.add_argument('--param-act-bit', type=int, help="")
+    parser.add_argument('--param-weight-bit', type=int, help="")
+    parser.add_argument('--param-bias-bit', type=int, help="")
+    parser.add_argument('--param-fake-quant', type=bool, help="")
+    parser.add_argument('--param-execution-type', type=str, help="")
+    parser.add_argument('--param-activation-function', type=str, help="")
+    parser.add_argument('--param-neural-network', default="resnet8", type=str, help="Choose one from resnet8, resnet20, resnet32, resnet56")
+
+    parser.add_argument('--conv-axx-level', default=0, type=int, help="Approximation level used in all layers (0 is exact)")
+    parser.add_argument('--conv-axx-level-list', type=int, nargs='+', help="List of integers specifying levels of approximation for each convolutional layer")
+    parser.add_argument('--linear-axx-level', default=0, type=int, help="Approximation level used in all layers (0 is exact)")
+    parser.add_argument('--linear-axx-level-list', type=int, nargs='+', help="List of integers specifying levels of approximation for each convolutional layer")
+    parser.add_argument('--transaxx-quant', default=8, type=int, help="")
     return parser.parse_args()
 
 
@@ -59,6 +73,22 @@ def main():
         device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f'Device used: {device}')
 
+
+    if args.param_act_bit is None:
+        args.param_act_bit = args.act_bit
+    if args.param_weight_bit is None:
+        args.param_weight_bit = args.weight_bit
+    if args.param_bias_bit is None:
+        args.param_bias_bit = args.bias_bit
+    if args.param_fake_quant is None:
+        args.param_fake_quant = args.fake_quant
+    if args.param_execution_type is None:
+        args.param_execution_type = args.execution_type
+    if args.param_activation_function is None:
+        args.param_activation_function = args.activation_function
+    if args.param_neural_network is None:
+        args.param_neural_network = args.neural_network
+
     if args.dataset == "cifar10":
         num_classes = 10
     elif args.dataset == "cifar100":
@@ -69,11 +99,14 @@ def main():
     if args.execution_type == "quant" or args.execution_type == "adapt":
         execution_type = "quant"
         namebit = "_a"+str(args.act_bit)+"_w"+str(args.weight_bit)+"_b"+str(args.bias_bit)
-    else:
+    elif args.execution_type == "float":
         execution_type = "float"
         namebit = ""
+    else:
+        execution_type = "transaxx"
+        namebit = f"_{args.transaxx_quant}x{args.transaxx_quant}"
 
-    if args.execution_type == "quant" or args.execution_type == "adapt":
+    if args.execution_type == "quant" or args.execution_type == "adapt" or args.execution_type == "transaxx":
         if args.fake_quant:
             namequant = "_fake"
         else:
@@ -81,13 +114,35 @@ def main():
     else:
         namequant = ""
 
-    if args.AT == True:
-        filename = AT_model_dir + "AT_" + args.neural_network + namebit + namequant + "_" + execution_type + "_" + args.dataset + "_" + args.activation_function + "_opt" + args.opt_level + "_alpha" + str(args.AT_alpha) +"_epsilon" + str(args.AT_epsilon) + "_" + str(args.AT_epochs) + ".pth"
+    if args.param_execution_type == "quant" or args.param_execution_type == "adapt":
+        param_execution_type = "quant"
+        param_namebit = "_a"+str(args.param_act_bit)+"_w"+str(args.param_weight_bit)+"_b"+str(args.param_bias_bit)
+    elif args.param_execution_type == "float":
+        param_execution_type = "float"
+        param_namebit = ""
     else:
-        filename = model_dir + args.neural_network + namebit + namequant + "_" + execution_type + "_" + args.dataset + "_" + args.activation_function + "_calibrated.pth"
+        param_execution_type = "transaxx"
+        param_namebit = f"_{args.transaxx_quant}x{args.transaxx_quant}"
+
+    if args.param_execution_type == "quant" or args.param_execution_type == "adapt" or args.param_execution_type == "transaxx":
+        if args.param_fake_quant:
+            param_namequant = "_fake"
+        else:
+            param_namequant = "_int"
+    else:
+        param_namequant = ""
+
+
+    if args.AT == True:
+        filename = AT_model_dir + "AT_" + args.param_neural_network + param_namebit + param_namequant + "_" + param_execution_type + "_" + args.dataset + "_" + args.param_activation_function + "_opt" + args.opt_level + "_alpha" + str(args.AT_alpha) +"_epsilon" + str(args.AT_epsilon) + "_" + str(args.AT_epochs) + ".pth"
+    else:
+        if args.execution_type == "transaxx":
+            filename = model_dir + args.param_neural_network + param_namebit + param_namequant + "_" + param_execution_type + "_" + args.dataset + "_" + args.param_activation_function + ".pth"
+        else:
+            filename = model_dir + args.param_neural_network + param_namebit + param_namequant + "_" + param_execution_type + "_" + args.dataset + "_" + args.param_activation_function + "_calibrated.pth"
     
-    if args.execution_type == "quant" or args.execution_type == "adapt":
-        filename_sc = model_dir + args.neural_network + namebit + namequant + "_" + execution_type + "_" + args.dataset + "_" + args.activation_function + '_scaling_factors.pkl'
+    if args.param_execution_type == "adapt":
+        filename_sc = model_dir + args.param_neural_network + param_namebit + param_namequant + "_" + param_execution_type + "_" + args.dataset + "_" + args.param_activation_function + '_scaling_factors.pkl'
         print(f'Scaling factors are loaded from: {filename_sc}')
 
     print(f'Model parameters are loaded from: {filename}')
@@ -100,7 +155,11 @@ def main():
     train_loader, valid_loader, test_loader = get_loaders_split(args.data_dir,
      batch_size=args.batch_size, dataset_type=args.dataset, num_workers=args.num_workers,
      split_val=args.split_val, disable_aug=args.disable_aug)
-    
+
+    print(f"train_loader size = {len(train_loader.dataset)}")
+    print(f"valid_loader size = {len(valid_loader.dataset)}")
+    print(f"test_loader size = {len(test_loader.dataset)}")
+
     mode= {"execution_type":args.execution_type, "act_bit":args.act_bit, "weight_bit":args.weight_bit, "bias_bit":args.bias_bit, "fake_quant":args.fake_quant, "classes":num_classes, "act_type":args.activation_function}
     if args.neural_network == "resnet8":
         model = resnet8(mode).to(device)
@@ -113,13 +172,24 @@ def main():
     else:
         exit("error unknown CNN model name")
 
-    checkpoint = torch.load(filename, map_location=device)
+    conv_axx_levels, linear_axx_levels = set_model_axx_levels(model, args.conv_axx_level_list, args.conv_axx_level, args.linear_axx_level_list, args.linear_axx_level)
 
-    model.load_state_dict(checkpoint['model_state_dict'], strict=True)
-    if args.execution_type == "quant" or args.execution_type == "adapt":
+    if args.param_execution_type == "transaxx":
+        init_transaxx_train(model, conv_axx_levels, args, args.transaxx_quant, device, False)
+        checkpoint = torch.load(filename, map_location=device)
+        model.load_state_dict(checkpoint['model_state_dict'], strict=True)
+    else:
+        checkpoint = torch.load(filename, map_location=device)
+        model.load_state_dict(checkpoint['model_state_dict'], strict=True)
+        if args.execution_type == "transaxx":
+            init_transaxx_train(model, conv_axx_levels, args, args.transaxx_quant, device, False)
+
+
+    if args.execution_type == "adapt":
         load_scaling_factors(model, filename_sc, device)
-    print(f"Number of images in the test set: {len(train_loader.dataset)}")
+    
 
+    
     if args.nb_attacks == 1:
         # Prompt attack type and parameters
         attack_type, params = get_attack()
@@ -127,6 +197,7 @@ def main():
         # Get the attack class dynamically and create the attack object
         AttackClass = getattr(torchattacks, attack_type)
         atk = AttackClass(model, **params)  # Pass the params as keyword arguments
+        atk.set_normalization_used(cifar10_mean, cifar10_std)
         print(f'Executing {atk}')
 
         formatted_params = [f"{int(value)}" if isinstance(value, int) else f"{value:.3f}" for value in params.values()]
@@ -144,9 +215,10 @@ def main():
         atk = torchattacks.MultiAttack(atk_list)
         attack_type = "_".join(attack_type_list)
         attack_parameters = ""
+        atk.set_normalization_used(cifar10_mean, cifar10_std)
         print(f'Executing {atk}')
 
-    atk.set_normalization_used(cifar10_mean, cifar10_std)
+    
     print(f"Generating and saving adversarial images for {args.dataset}...")
 
     if args.AT is True:
@@ -154,7 +226,18 @@ def main():
     else:
         AT_suffix = ""
     adv_data_path = args.adv_data_dir + AT_suffix + args.neural_network + namebit + namequant + "_" + args.execution_type + "_" + args.dataset + "_" + args.activation_function + "_" + attack_type + attack_parameters + ".pt"
-    atk.save(train_loader, save_path=adv_data_path, verbose=True)
+    atk.save(test_loader, save_path=adv_data_path, verbose=True, return_verbose=True)
+    print(f"Adversarial data has been saves in {adv_data_path}")
+
+    adv_loader = atk.load(load_path=adv_data_path, normalize=cifar10_mean_std)
+    print(f"Adversarial data size is {len(adv_loader.dataset)} images")
+
+    #print(model)
+    print(f'Model parameters are loaded from {filename}')
+    print(f"Adversarial data is loaded from {adv_data_path}")
+    print(f'Adversarial data size: {len(adv_loader.dataset)}')
+    test_loss, test_acc = evaluate_test_accuracy(adv_loader, model, device)
+    print(f"Mult: {conv_axx_levels}, {linear_axx_levels} | test loss:{test_loss:.4f} | final test acc:{test_acc:.4f} (adversarial)")
 
 if __name__ == "__main__":
     main()
