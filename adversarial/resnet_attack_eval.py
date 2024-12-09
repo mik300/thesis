@@ -12,6 +12,7 @@ import torch.nn.functional as F
 import torchattacks
 from adversarial.utils import get_attack
 import warnings
+import pickle
 
 #sys.stdout = open(os.devnull, 'w')
 #sys.stderr = open(os.devnull, 'w')
@@ -98,6 +99,8 @@ def get_args():
     parser.add_argument('--linear-axx-level', default=0, type=int, help="Approximation level used in all layers (0 is exact)")
     parser.add_argument('--linear-axx-level-list', type=int, nargs='+', help="List of integers specifying levels of approximation for each convolutional layer")
     parser.add_argument('--transaxx-quant', default=8, type=int, help="")
+
+    parser.add_argument('--prompt', default=1, type=int, help="")
     return parser.parse_args()
 
 
@@ -255,7 +258,7 @@ def main():
 
     if args.nb_attacks == 1:
         # Prompt attack type and parameters
-        attack_type, params = get_attack()
+        attack_type, params = get_attack(prompt=args.prompt)
 
         # Get the attack class dynamically and create the attack object
         AttackClass = getattr(torchattacks, attack_type)
@@ -270,7 +273,7 @@ def main():
         attack_type_list = []
         atk_list = []
         for i in range(args.nb_attacks):
-            attack_type, params = get_attack()
+            attack_type, params = get_attack(prompt=args.prompt)
             attack_type_list.append(attack_type) #Used later to name the saved data 
             AttackClass = getattr(torchattacks, attack_type)
             atk_list.append(AttackClass(model, **params))
@@ -294,16 +297,28 @@ def main():
     print(f'Adversarial data size: {len(adv_loader.dataset)}')
 
     #print(model)
-    test_loss, test_acc = evaluate_test_accuracy(adv_loader, model, device)
+    test_loss, adv_test_acc = evaluate_test_accuracy(adv_loader, model, device)
     print(message)
     print("")
     first_layer = next(model.children())  # Get the first layer
     print(type(first_layer))  # Print its type
-    print(f"Mult: {conv_axx_levels}, {linear_axx_levels} | test loss:{test_loss:.4f} | final test acc: {test_acc:.4f} (adversarial)")
+    print(f"Mult: {conv_axx_levels}, {linear_axx_levels} | test loss:{test_loss:.4f} | final test acc: {adv_test_acc:.4f} (adversarial)")
 
 
     test_loss, test_acc = evaluate_test_accuracy(test_loader, model, device)
     print(f"Mult: {conv_axx_levels}, {linear_axx_levels} | test loss:{test_loss:.4f} | final test acc: {test_acc:.4f} (standard)")
+    print(f"{adv_test_acc}/{test_acc}")
+
+    save_data = {"adv_test_acc": adv_test_acc, "test_acc": test_acc}
+    pkl_filename = "./adversarial/results_pkl/" + attack_type + attack_parameters + "/" + adv_execution_type + "/" + args.execution_type + "_" + "param_" + param_execution_type + ".pkl"
+    with open(pkl_filename, "wb") as file:  # "wb" means write in binary mode
+        pickle.dump(save_data, file)
+    print(f"Data saved to {pkl_filename}")
+
+    with open(pkl_filename, "rb") as file:  # "rb" means read in binary mode
+        loaded_data = pickle.load(file)
+
+    print("Loaded data:", loaded_data)
 
 if __name__ == "__main__":
     main()
