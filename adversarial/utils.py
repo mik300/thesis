@@ -39,15 +39,21 @@ attacks_dict = {
 }
 
 
-def get_attack():
+def get_attack(prompt=True):
     default_attack_type = "PGD"
-    attack_type = input(f"Enter the attack type [default: {default_attack_type}]: ") or default_attack_type
+    if prompt:
+        attack_type = input(f"Enter the attack type [default: {default_attack_type}]: ") or default_attack_type
+    else:
+        attack_type = default_attack_type
     if attack_type in attacks_dict:
         params = {}
         for param, info in attacks_dict[attack_type].items():
             default_value = info.get('default')
             param_type = info['type']
-            value_str = input(f"Enter value for {param} ({param_type}) : ")
+            if prompt:
+                value_str = input(f"Enter value for {param} ({param_type}) : ")
+            else:
+                value_str = ""
             
             # Parse input based on specified type
             if value_str == "":

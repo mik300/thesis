@@ -14,6 +14,7 @@ from transaxx.layers.adapt_convolution_layer import AdaptConv2D
 from transaxx.classification.ptflops import get_model_complexity_info
 from transaxx.classification.ptflops.pytorch_ops import conv_flops_counter_hook
 import warnings
+import wandb
 
 warnings.simplefilter(action='ignore', category=UserWarning)
 
@@ -25,7 +26,10 @@ def get_args():
     parser.add_argument('--dataset', default="cifar10", type=str, help="Select cifar10 or cifar100")
 
     parser.add_argument('--epochs', default=128, type=int, help="Number of training epochs")
-    parser.add_argument('--lr-max', default=1e-2, type=float, help="Maximum learning rate for 'cyclic' scheduler, standard learning rate for 'flat' scheduler")
+    parser.add_argument('--step-size', default=1, type=int, help="")
+    parser.add_argument('--lr-gamma', default=0.1, type=float, help="")
+    parser.add_argument('--lr', default=1e-1, type=float, help="")
+    parser.add_argument('--lr-max', default=1e-1, type=float, help="Maximum learning rate for 'cyclic' scheduler, standard learning rate for 'flat' scheduler")
     parser.add_argument('--lr-min', default=1e-4, type=float, help="Minimum learning rate for 'cyclic' scheduler")
     parser.add_argument('--lr-type', default="multistep", type=str, help="Select learning rate scheduler, choose between 'cyclic' or 'multistep'")
     parser.add_argument('--weight-decay', default=5e-4, type=float, help="Weight decay applied during the optimization step")
@@ -87,6 +91,8 @@ def main():
     filename = model_dir + args.neural_network + namebit + namequant + "_" + execution_type + "_" + args.dataset +"_" + args.activation_function + ".pth"
     filename_sc = model_dir + args.neural_network + namebit + namequant + "_" + execution_type + "_" + args.dataset +"_" + args.activation_function + '_scaling_factors.pkl'
 
+  
+
     #print(filename)
     #print(filename_sc)
 
@@ -111,12 +117,21 @@ def main():
         exit("error unknown CNN model name")
     print(f"args.reload = {args.reload}")
 
-    if execution_type == "transaxx":
-       init_transaxx_train(model, [0], args, args.transaxx_quant, device, False)
+
 
     if args.reload:
-        checkpoint = torch.load(filename, map_location=device)
-        model.load_state_dict(checkpoint['model_state_dict'], strict=False)
+        # checkpoint = torch.load("neural_networks/models/resnet8_float_cifar10_ReLU.pth", map_location=device)
+        # model.load_state_dict(checkpoint['model_state_dict'], strict=True)
+
+        checkpoint = torch.load("neural_networks/models/resnet8_a8_w8_b32_fake_quant_cifar10_ReLU.pth", map_location=device)
+        model.load_state_dict(checkpoint['model_state_dict'], strict=True)
+
+        # checkpoint = torch.load("neural_networks/models/resnet8_float_cifar100_ReLU.pth", map_location=device)
+        # model.load_state_dict(checkpoint['model_state_dict'], strict=True)
+
+        # checkpoint = torch.load(filename, map_location=device)
+        # model.load_state_dict(checkpoint['model_state_dict'], strict=False)
+        
         model.to(device)
         model.eval()
         test_loss, test_acc = evaluate_test_accuracy(test_loader, model, device)
@@ -189,25 +204,36 @@ def main():
 
             exit()
 
+    if execution_type == "transaxx":
+       init_transaxx_train(model, [0], args, args.transaxx_quant, device, args.fake_quant)
     #load_scaling_factors(model, filename_sc, device)
     model.train()
     
     criterion = nn.CrossEntropyLoss().to(device)
     opt = torch.optim.SGD(model.parameters(), lr=args.lr_max, momentum=args.lr_momentum, weight_decay=args.weight_decay)
 
-    lr_steps = args.epochs * len(train_loader)
+    lr_step_size = 128#args.epochs #* len(train_loader)
+    # lr_step_size = 1
+    print(f"lr-steps = {lr_step_size}")
     if args.lr_type == 'cyclic':
         scheduler = torch.optim.lr_scheduler.CyclicLR(opt, base_lr=args.lr_min, max_lr=args.lr_max,
-                                                      step_size_up=lr_steps / 2, step_size_down=lr_steps / 2)
+                                                      step_size_up=lr_step_size / 2, step_size_down=lr_step_size / 2)
+        
     elif args.lr_type == 'multistep':
-        scheduler = torch.optim.lr_scheduler.MultiStepLR(opt, milestones=[lr_steps / 2, lr_steps * 3 / 4], gamma=0.1)
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(opt, milestones=[lr_step_size / 2, lr_step_size * 3 / 4], gamma=args.lr_gamma)
     elif args.lr_type == 'step':
-        opt = torch.optim.SGD(model.parameters(), lr=0.1)
-        scheduler = torch.optim.lr_scheduler.StepLR(opt, step_size=1, gamma=0.5)
+        lr_step_size = args.step_size
+        opt = torch.optim.SGD(model.parameters(), lr=args.lr)
+        scheduler = torch.optim.lr_scheduler.StepLR(opt, step_size=lr_step_size, gamma=args.lr_gamma)
+
+    if args.execution_type == "transaxx" and args.reload == True and args.continue_training == True:
+        run = wandb.init(project="Retraining transaxx",
+                config={"epochs": args.epochs, "batch_size": args.batch_size, "dataset": args.dataset, "lr": args.lr, "lr_max": args.lr_max, "lr_min": args.lr_min,
+                        "lr_gamma": args.lr_gamma, "lr_type": args.lr_type, "lr_step_size": lr_step_size, "weight_decay": args.weight_decay, "lr_momentum": args.lr_momentum}) 
 
     filename = model_dir + args.neural_network + namebit + namequant + "_" + args.execution_type + "_" + args.dataset +"_" + args.activation_function + ".pth"
     print(f'Saving model to {filename}')
-    print(model)
+    #print(model)
     print(f'Training on dataset with {len(train_loader.dataset)} images')
     _, test_acc = evaluate_test_accuracy(valid_loader, model, device)
     print(f'Initial accuracy: {test_acc}')
@@ -220,20 +246,18 @@ def main():
         train_n = 0
         for i, (X, y) in enumerate(train_loader):
             X, y = X.to(device), y.to(device)
-            #X.requires_grad = True
             output = model(X)
             loss = criterion(output, y)
             opt.zero_grad()
             loss.backward()
             opt.step()
-            if args.lr_type != 'step':
-                scheduler.step()
-            #print(f'X.grad.shape = {X.grad.shape}')
+            # if args.lr_type != 'step':
+            #     scheduler.step()
             train_loss += loss.item() * y.size(0)
             train_acc += (output.max(1)[1] == y).sum().item()
             train_n += y.size(0)
-        if args.lr_type == 'step':
-            scheduler.step()
+        # if args.lr_type == 'step':
+        scheduler.step()
         epoch_time = time.time()
         lr = scheduler.get_lr()[0]
         model.eval()
@@ -252,8 +276,12 @@ def main():
                                      'wd': args.weight_decay}
             }, filename)
         model.train()
-
+        if args.execution_type == "transaxx" and args.reload == True and args.continue_training == True:
+            run.log({"epoch": epoch, "lr": lr, "train_acc": (train_acc/train_n), "valid_acc": test_acc, "lr_step_size": lr_step_size})
         print(f'epoch:{epoch}, time:{epoch_time - start_epoch_time:.2f}, lr:{lr:.6f}, train loss:{train_loss / train_n:.4f}, train acc:{train_acc / train_n:.4f}, valid loss:{test_loss:.4f}, valid acc:{test_acc:.4f}')
+
+    if args.execution_type == "transaxx" and args.reload == True and args.continue_training == True:
+        run.finish()
 
 
     # Evaluation
@@ -267,7 +295,7 @@ def main():
         model = resnet56(mode).to(device)
 
     if execution_type == "transaxx":
-        init_transaxx_train(model, [0], args, args.transaxx_quant, device, False)
+        init_transaxx_train(model, [0], args, args.transaxx_quant, device, args.fake_quant)
 
     model.load_state_dict(torch.load(filename, map_location=device)['model_state_dict'])
     model.float()
