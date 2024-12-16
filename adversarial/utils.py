@@ -40,7 +40,7 @@ attacks_dict = {
 
 
 def get_attack(prompt=True):
-    default_attack_type = "PGD"
+    default_attack_type = "BIM"
     if prompt:
         attack_type = input(f"Enter the attack type [default: {default_attack_type}]: ") or default_attack_type
     else:

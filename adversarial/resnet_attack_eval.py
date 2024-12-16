@@ -101,6 +101,7 @@ def get_args():
     parser.add_argument('--transaxx-quant', default=8, type=int, help="")
 
     parser.add_argument('--prompt', default=1, type=int, help="")
+    parser.add_argument('--save-data', default=0, type=int, help="")
     return parser.parse_args()
 
 
@@ -233,14 +234,14 @@ def main():
 
     if args.param_execution_type == "transaxx":
         if args.execution_type == "transaxx":
-            init_transaxx(model, conv_axx_levels, linear_axx_levels, args, args.transaxx_quant, device, fake_quant=False)
+            init_transaxx(model, conv_axx_levels, linear_axx_levels, args, args.transaxx_quant, device, fake_quant=True)
         checkpoint = torch.load(filename, map_location=device)
         model.load_state_dict(checkpoint['model_state_dict'], strict=False)
     else:
         checkpoint = torch.load(filename, map_location=device)
         model.load_state_dict(checkpoint['model_state_dict'], strict=True)
         if args.execution_type == "transaxx":
-            init_transaxx(model, conv_axx_levels, linear_axx_levels, args, args.transaxx_quant, device, fake_quant=False)
+            init_transaxx(model, conv_axx_levels, linear_axx_levels, args, args.transaxx_quant, device, fake_quant=True)
         
     
 
@@ -307,18 +308,18 @@ def main():
 
     test_loss, test_acc = evaluate_test_accuracy(test_loader, model, device)
     print(f"Mult: {conv_axx_levels}, {linear_axx_levels} | test loss:{test_loss:.4f} | final test acc: {test_acc:.4f} (standard)")
-    print(f"{adv_test_acc}/{test_acc}")
 
-    save_data = {"adv_test_acc": adv_test_acc, "test_acc": test_acc}
-    pkl_filename = "./adversarial/results_pkl/" + attack_type + attack_parameters + "/" + adv_execution_type + "/" + args.execution_type + "_" + "param_" + param_execution_type + ".pkl"
-    with open(pkl_filename, "wb") as file:  # "wb" means write in binary mode
-        pickle.dump(save_data, file)
-    print(f"Data saved to {pkl_filename}")
+    if args.save_data:
+        data = {"adv_test_acc": adv_test_acc, "test_acc": test_acc}
+        pkl_filename = "./adversarial/results_pkl/" + attack_type + attack_parameters + "/" + adv_execution_type + "/" + args.execution_type + "_" + "param_" + param_execution_type + ".pkl"
+        with open(pkl_filename, "wb") as file:  # "wb" means write in binary mode
+            pickle.dump(data, file)
+        print(f"Data saved to {pkl_filename}")
 
-    with open(pkl_filename, "rb") as file:  # "rb" means read in binary mode
-        loaded_data = pickle.load(file)
+        with open(pkl_filename, "rb") as file:  # "rb" means read in binary mode
+            loaded_data = pickle.load(file)
 
-    print("Loaded data:", loaded_data)
+        print("Loaded data:", loaded_data)
 
 if __name__ == "__main__":
     main()

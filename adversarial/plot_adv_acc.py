@@ -151,7 +151,8 @@ with open(pkl_file_transaxx_transaxx, "rb") as file:
 
 adv_acc = [loaded_data_float_float['adv_test_acc'], 0, loaded_data_quant_float['adv_test_acc'], 0, loaded_data_transaxx_float['adv_test_acc'], 0, loaded_data_float_quant['adv_test_acc'], 0, loaded_data_quant_quant['adv_test_acc'], 0, loaded_data_transaxx_quant['adv_test_acc'], 0, loaded_data_float_transaxx['adv_test_acc'], 0, loaded_data_quant_transaxx['adv_test_acc'], 0, loaded_data_transaxx_transaxx['adv_test_acc'], 0]
 reg_acc = [loaded_data_float_float['test_acc'], 0, loaded_data_quant_float['test_acc'], 0, loaded_data_transaxx_float['test_acc'], 0, loaded_data_float_quant['test_acc'], 0, loaded_data_quant_quant['test_acc'], 0, loaded_data_transaxx_quant['test_acc'], 0, loaded_data_float_transaxx['test_acc'], 0, loaded_data_quant_transaxx['test_acc'], 0, loaded_data_transaxx_transaxx['test_acc'], 0]
-
+print(f"adv_acc = {loaded_data_transaxx_transaxx['adv_test_acc']}")
+print(f"test_acc = {loaded_data_transaxx_transaxx['test_acc']}")
 # Positions
 bar_width = 0.4
 gap = 0.2  # Space between pairs

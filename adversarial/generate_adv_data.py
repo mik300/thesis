@@ -175,14 +175,14 @@ def main():
     conv_axx_levels, linear_axx_levels = set_model_axx_levels(model, args.conv_axx_level_list, args.conv_axx_level, args.linear_axx_level_list, args.linear_axx_level)
 
     if args.param_execution_type == "transaxx":
-        init_transaxx_train(model, conv_axx_levels, args, args.transaxx_quant, device, False)
+        init_transaxx_train(model, conv_axx_levels, args, args.transaxx_quant, device, args.fake_quant)
         checkpoint = torch.load(filename, map_location=device)
         model.load_state_dict(checkpoint['model_state_dict'], strict=True)
     else:
         checkpoint = torch.load(filename, map_location=device)
         model.load_state_dict(checkpoint['model_state_dict'], strict=True)
         if args.execution_type == "transaxx":
-            init_transaxx_train(model, conv_axx_levels, args, args.transaxx_quant, device, False)
+            init_transaxx_train(model, conv_axx_levels, args, args.transaxx_quant, device, args.fake_quant)
 
 
     if args.execution_type == "adapt":

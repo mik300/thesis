@@ -15,7 +15,9 @@ data/dataset/
 approximate_multiplier
 read_pth.py
 biases.txt
+resnet_biases.txt
 weights.txt
+resnet_weights.txt
 conv_inputs.txt
 gemmini_biases.txt
 gemmini_inputs.txt
@@ -53,3 +55,4 @@ read_pth.py
 read_scaling_factors.py
 read_weights
 *.pkl
+wandb/
