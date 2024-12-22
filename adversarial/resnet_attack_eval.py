@@ -14,8 +14,7 @@ from adversarial.utils import get_attack
 import warnings
 import pickle
 
-#sys.stdout = open(os.devnull, 'w')
-#sys.stderr = open(os.devnull, 'w')
+
 #import matplotlib.pyplot as plt
 """
 This python file can be used to test the performance of the ResNet neural networks with different approximate multiplier configurations.
@@ -83,7 +82,7 @@ def get_args():
     parser.add_argument('--param-fake-quant', type=bool, help="")
     parser.add_argument('--param-execution-type', type=str, help="")
     parser.add_argument('--param-activation-function', type=str, help="")
-    parser.add_argument('--param-neural-network', default="resnet8", type=str, help="Choose one from resnet8, resnet20, resnet32, resnet56")
+    parser.add_argument('--param-neural-network', type=str, help="Choose one from resnet8, resnet20, resnet32, resnet56")
 
     parser.add_argument('--adv-data-dir', default="./adversarial/adv_data/", type=str, help="Directory in which the adversarial data is stored")
     parser.add_argument('--adv-act-bit', type=int, help="")
@@ -92,7 +91,11 @@ def get_args():
     parser.add_argument('--adv-fake-quant', type=bool, help="")
     parser.add_argument('--adv-execution-type', type=str, help="")
     parser.add_argument('--adv-activation-function', type=str, help="")
-    parser.add_argument('--adv-neural-network', default="resnet8", type=str, help="Choose one from resnet8, resnet20, resnet32, resnet56")
+    parser.add_argument('--adv-neural-network', type=str, help="Choose one from resnet8, resnet20, resnet32, resnet56")
+    parser.add_argument('--adv-conv-axx-level', default=0, type=int, help="Approximation level used in all layers (0 is exact)")
+    parser.add_argument('--adv-conv-axx-level-list', type=int, nargs='+', help="List of integers specifying levels of approximation for each convolutional layer")
+    parser.add_argument('--adv-linear-axx-level', default=0, type=int, help="Approximation level used in all layers (0 is exact)")
+    parser.add_argument('--adv-linear-axx-level-list', type=int, nargs='+', help="List of integers specifying levels of approximation for each convolutional layer")
 
     parser.add_argument('--conv-axx-level', default=0, type=int, help="Approximation level used in all layers (0 is exact)")
     parser.add_argument('--conv-axx-level-list', type=int, nargs='+', help="List of integers specifying levels of approximation for each convolutional layer")
@@ -142,6 +145,10 @@ def main():
         args.adv_activation_function = args.param_activation_function
     if args.adv_neural_network is None:
         args.adv_neural_network = args.param_neural_network
+    if args.adv_conv_axx_level is None:
+        args.adv_conv_axx_level = args.conv_axx_level
+    if args.adv_conv_axx_level_list is None:
+        args.adv_conv_axx_level_list = args.conv_axx_level_list
     
 
     if args.execution_type == 'adapt':
@@ -202,7 +209,7 @@ def main():
         if args.param_execution_type == "transaxx":
             filename = model_dir + args.param_neural_network + param_namebit + param_namequant + "_" + param_execution_type + "_" + args.dataset + "_" + args.param_activation_function + ".pth"
         else:
-            filename = model_dir + args.param_neural_network + param_namebit + param_namequant + "_" + param_execution_type + "_" + args.dataset + "_" + args.param_activation_function + "_calibrated.pth"
+            filename = model_dir + args.param_neural_network + param_namebit + param_namequant + "_" + param_execution_type + "_" + args.dataset + "_" + args.param_activation_function + ".pth"
     
     
 
@@ -232,6 +239,21 @@ def main():
 
     conv_axx_levels, linear_axx_levels = set_model_axx_levels(model, args.conv_axx_level_list, args.conv_axx_level, args.linear_axx_level_list, args.linear_axx_level)
 
+    adv_conv_axx_levels, adv_linear_axx_levels = set_model_axx_levels(model, args.adv_conv_axx_level_list, args.adv_conv_axx_level, args.adv_linear_axx_level_list, args.adv_linear_axx_level)
+
+    if args.execution_type == "transaxx":
+        conv_axx_levels_string = "_" + "_".join(map(str, conv_axx_levels))
+        linear_axx_levels_string = "_" + "_".join(map(str, linear_axx_levels))
+    else:
+        conv_axx_levels_string = ""
+
+    if args.adv_execution_type == "transaxx":
+        adv_conv_axx_levels_string = "_" + "_".join(map(str, adv_conv_axx_levels))
+        linear_axx_levels_string = "_" + "_".join(map(str, adv_linear_axx_levels))
+    else:
+        adv_conv_axx_levels_string = ""
+
+
     if args.param_execution_type == "transaxx":
         if args.execution_type == "transaxx":
             init_transaxx(model, conv_axx_levels, linear_axx_levels, args, args.transaxx_quant, device, fake_quant=True)
@@ -255,7 +277,12 @@ def main():
     model.eval()
     
     if args.execution_type == "adapt":
-        update_model(model, base_mult, conv_axx_levels)
+        base_mult = "bw_mult_9_9_"
+        if args.conv_axx_level_list is None:
+            approximation_levels = [args.conv_axx_level, args.conv_axx_level, args.conv_axx_level, args.conv_axx_level, args.conv_axx_level, args.conv_axx_level, args.conv_axx_level, args.conv_axx_level]
+        else:
+            approximation_levels = args.conv_axx_level
+        update_model(model, base_mult, approximation_levels)
 
     if args.nb_attacks == 1:
         # Prompt attack type and parameters
@@ -286,7 +313,7 @@ def main():
         message = f'Executing a MultiAttack with the following attack types: {attack_type_list}'
 
 
-    adv_data_path = args.adv_data_dir + args.adv_neural_network + adv_namebit + adv_namequant + "_" + adv_execution_type + "_" + args.dataset + "_" + args.activation_function + "_" + attack_type + attack_parameters + ".pt"
+    adv_data_path = args.adv_data_dir + args.adv_neural_network + adv_namebit + adv_namequant + "_" + adv_execution_type + adv_conv_axx_levels_string + "_" + args.dataset + "_" + args.activation_function + "_" + attack_type + attack_parameters + ".pt"
     if not os.path.exists(adv_data_path):
         raise FileNotFoundError(f"Error: '{adv_data_path}' not found. Run generated_adv_data.py to generate the required data.")
     adv_loader = atk.load(load_path=adv_data_path, normalize=cifar10_mean_std)
@@ -311,12 +338,13 @@ def main():
 
     if args.save_data:
         data = {"adv_test_acc": adv_test_acc, "test_acc": test_acc}
-        pkl_filename = "./adversarial/results_pkl/" + attack_type + attack_parameters + "/" + adv_execution_type + "/" + args.execution_type + "_" + "param_" + param_execution_type + ".pkl"
-        with open(pkl_filename, "wb") as file:  # "wb" means write in binary mode
+        pkl_path = "./adversarial/results_pkl/" + attack_type + attack_parameters + "/" + args.adv_neural_network + "/" + adv_execution_type + adv_conv_axx_levels_string + "/" + args.neural_network + "_" + args.execution_type + conv_axx_levels_string + "_" + "param_" + param_execution_type + ".pkl"
+        os.makedirs(os.path.dirname(pkl_path), exist_ok=True)
+        with open(pkl_path, "wb") as file:  # "wb" means write in binary mode
             pickle.dump(data, file)
-        print(f"Data saved to {pkl_filename}")
+        print(f"Data saved to {pkl_path}")
 
-        with open(pkl_filename, "rb") as file:  # "rb" means read in binary mode
+        with open(pkl_path, "rb") as file:  # "rb" means read in binary mode
             loaded_data = pickle.load(file)
 
         print("Loaded data:", loaded_data)

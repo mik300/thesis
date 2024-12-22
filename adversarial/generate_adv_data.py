@@ -48,7 +48,7 @@ def get_args():
     parser.add_argument('--param-fake-quant', type=bool, help="")
     parser.add_argument('--param-execution-type', type=str, help="")
     parser.add_argument('--param-activation-function', type=str, help="")
-    parser.add_argument('--param-neural-network', default="resnet8", type=str, help="Choose one from resnet8, resnet20, resnet32, resnet56")
+    parser.add_argument('--param-neural-network', type=str, help="Choose one from resnet8, resnet20, resnet32, resnet56")
 
     parser.add_argument('--conv-axx-level', default=0, type=int, help="Approximation level used in all layers (0 is exact)")
     parser.add_argument('--conv-axx-level-list', type=int, nargs='+', help="List of integers specifying levels of approximation for each convolutional layer")
@@ -173,6 +173,11 @@ def main():
         exit("error unknown CNN model name")
 
     conv_axx_levels, linear_axx_levels = set_model_axx_levels(model, args.conv_axx_level_list, args.conv_axx_level, args.linear_axx_level_list, args.linear_axx_level)
+    if args.execution_type == "transaxx":
+        conv_axx_levels_string = "_" + "_".join(map(str, conv_axx_levels))
+    else:
+        conv_axx_levels_string = ""
+
 
     if args.param_execution_type == "transaxx":
         init_transaxx_train(model, conv_axx_levels, args, args.transaxx_quant, device, args.fake_quant)
@@ -225,7 +230,7 @@ def main():
         AT_suffix = "AT_"
     else:
         AT_suffix = ""
-    adv_data_path = args.adv_data_dir + AT_suffix + args.neural_network + namebit + namequant + "_" + args.execution_type + "_" + args.dataset + "_" + args.activation_function + "_" + attack_type + attack_parameters + ".pt"
+    adv_data_path = args.adv_data_dir + AT_suffix + args.neural_network + namebit + namequant + "_" + args.execution_type + conv_axx_levels_string + "_" + args.dataset + "_" + args.activation_function + "_" + attack_type + attack_parameters + ".pt"
     atk.save(test_loader, save_path=adv_data_path, verbose=True, return_verbose=True)
     print(f"Adversarial data has been saves in {adv_data_path}")
 
