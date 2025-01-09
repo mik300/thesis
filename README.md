@@ -1,9 +1,14 @@
 
 # About
-This repository contains the code used to train some ResNet models for CIFAR10 and CIFAR100.
-The training is done using fake quantization, followed by 99th percentile calibration for the activations, allowing fully quantized simulation of all convolutional and linear layers.
-Thi repository also contains a basic support to approximate convolutions, implemented using AdaPT classes.
-## Install instructions
+This repository aims to evaluate the robustness of quantized CNNs with approximate computing against adversarial attacks.
+The repository includes:  
+
+- Code for training ResNet models on the CIFAR10 and CIFAR100 datasets.  
+- Support for fast adversarial training, available in the `fast_adversarial` directory.  
+- Implementation of approximate convolutions using the **TransAxx** framework.  
+- A directory dedicated to simulating adversarial attacks on CNN models. 
+
+## Installation
 Execute the following commands to install the necessary dependencies.
 
 Open a terminal and intall ninja-build
@@ -11,18 +16,84 @@ Open a terminal and intall ninja-build
 sudo apt update
 sudo apt install ninja-build
 ```
-Install marlin environment (requires anaconda or miniconda https://www.anaconda.com/download)
+Install all the necessary dependecies using conda (requires anaconda or miniconda https://www.anaconda.com/download)
 ```bash
-cd MARLIN
 
-conda env create -f marlin.yml
+conda env create -f environment.yml
 ```
-Inside each folder there are README files with additional information useful to install additional components, execute the code and replicate the data. 
 
-In order to use the multipliers LUTs and pre-trained neural networks, it is necessary to install 7-zip and extract the files according to the README contained in each folder. You can download 7-zip at https://www.7-zip.org/download.html
-When launching any python file, remember to keep the folder hierarchy as defined in this repository.
-You can add the folders to the PYTHONPATH with the following command:
+In order to use all 255 multipliers for the TransAxx model, it is necessary to install 7-zip and extract the `axx_mults_8x8.7z` file located at `transaxx/ext_modules/include/nn/cuda/axx_mults`. You can download 7-zip at https://www.7-zip.org/download.html
+
+Finally, modify the PYTHONPATH as follows:
 ```bash
-export PYTHONPATH="${PYTHONPATH}:your_path_to_this folder/:your_path_to_this folder/neural_networks:your_path_to_this folder/benchmark_CIFAR10:your_path_to_this folder/approximate_multiplier$"$
-export PYTHONPATH="${PYTHONPATH}:/home/michael/thesis_fw/:/home/michael/thesis_fw/neural_networks:/home/michael/thesis_fw/benchmark_CIFAR10:/home/michael/thesis_fw/approximate_multiplier"
+export PYTHONPATH="${PYTHONPATH}:your_path_to_this_folder/transaxx/:your_path_to_this_folder/neural_networks:your_path_to_this_folder/benchmark_CIFAR10:your_path_to_this_folder/approximate_multiplier$"$
 ```
+
+# Usage
+
+Focus on the `neural_networks`, `fast_adversarial`, and `adversarial` directories. The other directories primarily contain dependencies, and you won’t need to run any scripts from them.  
+
+## Model Training and Evaluation
+To train CIFAR-10 NNs you can use the script "train_cifar10.py", you can check the options by executing the following command: 
+> python neural_networks/CIFAR10/train_cifar10.py --help
+
+
+As an example, run the following command:
+> python neural_networks/CIFAR10/train_cifar10.py --neural-network resnet8 --execution-type quant
+
+The available execution types are the following:
+- **`float`**: Models are defined using regular layers from `torch.nn`.
+- **`quant`**: These are quantized models, the quantization is achieved using custom layer definitions in `neural_networks/custom_layers.py`.
+- **`transaxx`**: These are quantized models that also support approximate multipliers. Quantization is done using `pytorch-quantization`, and custom layers are defined in `transaxx/layers`. For more details about the `transaxx` layer definitions, refer to the `transaxx/layers/` directory.
+
+To evaluate a model’s accuracy, run the following command:
+> python neural_networks/CIFAR10/test_transaxx.py --neural-network resnet32 --execution-type quant --param-execution-type float
+
+In this example, we evaluate the accuracy of a `resnet32` model with `quant` execution type, using pre-trained parameters from a `resnet32` model with `float` execution type.
+
+In general, there are three execution types available, and you can load pre-trained parameters from any of them. This allows for nine possible combinations, such as loading parameters from a `float` model into a `transaxx` model, or from `quant` into `transaxx`, and so on.
+ 
+
+## Adversarial Training
+The `fast_adversarial` directory contains training scripts using an FGSM adversary, with the goal of increasing the model's accuracy when under attack. For a more detailed overview of this repository see the README in the `fast_adversarial` directory.
+
+For example running the following command:
+> python fast_adversarial/CIFAR10/train_resnet.py --neural-network resnet32 --execution-type transaxx --epochs 112 --reload 1
+
+Would instantiate a resnet32 model with pre-trained parameters (because reload is 1), and continue training for a number of epochs equal to the difference between the number of epochs passed as argument and the number of epochs used for the pre-trained parameters.
+The adversarially trained parameters are saved in `fast_adversarial/AT_models`.
+
+## Attack Simulation
+
+To simulate attacks on CNNs, the first step is generating perturbed data (adversarial images). This can be done using the following command:
+
+> python adversarial/generate_adv_data.py --neural-network resnet8 --execution-type quant 
+
+In this command:
+- A resnet8 model is instantiated.
+- You are prompted to select the type of attack and its parameters.
+- Adversarial images are generated based on this model and saved in the `adversarial/adv_data` directory.
+
+To evaluate a model's accuracy under attack, use the resnet_attack_eval.py script. For instance:
+
+> python adversarial/resnet_attack_eval.py --neural-network resnet32 --execution-type quant --adv-neural-network resnet8 --adv-execution-type quant
+
+Here:
+- A resnet32 model is instantiated and evaluated.
+- The adversarial data generated by the resnet8 model in the previous step is used to test the resnet32 model's accuracy.
+
+
+## Acknowledgments
+This project makes use of the following third-party libraries:
+
+-[MARLIN](https://github.com/vlsi-lab/MARLIN)
+Used for defining the CNN models and providing the script to train them. 
+
+-[fast_adversarial](https://github.com/locuslab/fast_adversarial/tree/master)
+Used for adversarial training of the CNN models. 
+
+-[TransAxx](https://github.com/dimdano/transaxx)
+Used for supporting approximate convolutional layers.
+
+-[Adversarial-Attacks-PyTorch](https://github.com/Harry24k/adversarial-attacks-pytorch)
+Used to generate adversarial data for simulating adversarial attacks.
