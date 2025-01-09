@@ -37,7 +37,7 @@ def get_args():
 
     parser.add_argument('--opt-level', default='O2', type=str, choices=['O0', 'O1', 'O2'],
         help='O0 is FP32 training, O1 is Mixed Precision, and O2 is "Almost FP16" Mixed Precision')
-    parser.add_argument('--AT', default=False, type=bool, help="Set to true to use Adversarially Trained (AT) models")
+    parser.add_argument('--AT', default=0, type=int, help="Set to true to use Adversarially Trained (AT) models")
     parser.add_argument('--AT-epsilon', default=8, type=int, help="This epsilon is unrelated to the attack; it's used to select the Adversarially Trained model")
     parser.add_argument('--AT-alpha', default=10, type=float, help="This alpha is unrelated to the attack; it's used to select the Adversarially Trained model")
     parser.add_argument('--AT-epochs', default=5, type=int, help="The number of epochs has no effect on this script; it used to select the Adversarially Trained model")
@@ -133,7 +133,7 @@ def main():
         param_namequant = ""
 
 
-    if args.AT == True:
+    if args.AT == 1:
         filename = AT_model_dir + "AT_" + args.param_neural_network + param_namebit + param_namequant + "_" + param_execution_type + "_" + args.dataset + "_" + args.param_activation_function + "_opt" + args.opt_level + "_alpha" + str(args.AT_alpha) +"_epsilon" + str(args.AT_epsilon) + "_" + str(args.AT_epochs) + ".pth"
     else:
         if args.execution_type == "transaxx":
@@ -205,7 +205,13 @@ def main():
         atk.set_normalization_used(cifar10_mean, cifar10_std)
         print(f'Executing {atk}')
 
-        formatted_params = [f"{int(value)}" if isinstance(value, int) else f"{value:.3f}" for value in params.values()]
+        #formatted_params = [f"{int(value)}" if isinstance(value, int) else f"{value:.3f}" for value in params.values()]
+        formatted_params = [
+        f"{value}" if isinstance(value, int) else 
+        f"{value:.3f}" if isinstance(value, float) else 
+        f"{value}" 
+        for value in params.values()
+        ]
         # Join parameters with underscores to form the suffix
         attack_parameters = "_" + "_".join(formatted_params)
     else:
@@ -226,7 +232,7 @@ def main():
     
     print(f"Generating and saving adversarial images for {args.dataset}...")
 
-    if args.AT is True:
+    if args.AT == 1:
         AT_suffix = "AT_"
     else:
         AT_suffix = ""

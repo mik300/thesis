@@ -19,21 +19,7 @@ def get_args():
     parser.add_argument('--neural-network', default="resnet8", type=str, help="Choose one from resnet8, resnet20, resnet32, resnet56")
     parser.add_argument('--execution-type', default="quant", type=str, help="Leave it like this")
 
-    parser.add_argument('--param-act-bit', type=int, help="")
-    parser.add_argument('--param-weight-bit', type=int, help="")
-    parser.add_argument('--param-bias-bit', type=int, help="")
-    parser.add_argument('--param-fake-quant', type=bool, help="")
-    parser.add_argument('--param-execution-type', type=str, help="")
-    parser.add_argument('--param-activation-function', type=str, help="")
-    parser.add_argument('--param-neural-network', type=str, help="Choose one from resnet8, resnet20, resnet32, resnet56")
 
-    parser.add_argument('--adv-data-dir', default="./adversarial/adv_data/", type=str, help="Directory in which the adversarial data is stored")
-    parser.add_argument('--adv-act-bit', type=int, help="")
-    parser.add_argument('--adv-weight-bit', type=int, help="")
-    parser.add_argument('--adv-bias-bit', type=int, help="")
-    parser.add_argument('--adv-fake-quant', type=bool, help="")
-    parser.add_argument('--adv-execution-type', type=str, help="")
-    parser.add_argument('--adv-activation-function', type=str, help="")
     parser.add_argument('--adv-neural-network', type=str, help="Choose one from resnet8, resnet20, resnet32, resnet56")
     parser.add_argument('--adv-conv-axx-level', default=0, type=int, help="Approximation level used in all layers (0 is exact)")
     parser.add_argument('--adv-conv-axx-level-list', type=int, nargs='+', help="List of integers specifying levels of approximation for each convolutional layer")
@@ -44,7 +30,13 @@ def get_args():
     parser.add_argument('--conv-axx-level-list', type=int, nargs='+', help="List of integers specifying levels of approximation for each convolutional layer")
     parser.add_argument('--linear-axx-level', default=0, type=int, help="Approximation level used in all layers (0 is exact)")
     parser.add_argument('--linear-axx-level-list', type=int, nargs='+', help="List of integers specifying levels of approximation for each convolutional layer")
-    parser.add_argument('--transaxx-quant', default=8, type=int, help="")
+
+    parser.add_argument('--AT', default=0, type=int, help="Set to true to use Adversarially Trained (AT) models")
+    parser.add_argument('--adv-AT', default=0, type=int, help="Set to true to use Adversarially Trained (AT) models")
+    parser.add_argument('--AT-epsilon', default=8, type=int, help="This epsilon is unrelated to the attack; it's used to select the Adversarially Trained model")
+    parser.add_argument('--AT-alpha', default=10, type=float, help="This alpha is unrelated to the attack; it's used to select the Adversarially Trained model")
+    parser.add_argument('--AT-epochs', default=5, type=int, help="The number of epochs has no effect on this script; it used to select the Adversarially Trained model")
+    parser.add_argument('--AT-epochs-float', default=5, type=int, help="The number of epochs has no effect on this script; it used to select the Adversarially Trained model")
     return parser.parse_args()
 
 def main():
@@ -89,71 +81,71 @@ def main():
     adv_conv_axx_levels_str = " ".join(map(str, adv_conv_axx_levels))
     
 
-    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "float", "--execution-type", "float", "--adv-execution-type", "float"]
+    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "float", "--execution-type", "float", "--adv-execution-type", "float", "--AT", f"{args.AT}", "--AT-epochs", f"{args.AT_epochs_float}", "--AT-epsilon", f"{args.AT_epsilon}", "--adv-AT", f"{args.adv_AT}"]
     subprocess.run(["python", "adversarial/resnet_attack_eval.py", *args1])
-    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "float", "--execution-type", "float", "--adv-execution-type", "quant"]
+    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "float", "--execution-type", "float", "--adv-execution-type", "quant", "--AT", f"{args.AT}", "--AT-epochs", f"{args.AT_epochs_float}", "--AT-epsilon", f"{args.AT_epsilon}", "--adv-AT", f"{args.adv_AT}"]
     subprocess.run(["python", "adversarial/resnet_attack_eval.py", *args1])
-    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "float", "--execution-type", "float", "--adv-execution-type", "transaxx"]
-    subprocess.run(["python", "adversarial/resnet_attack_eval.py", *args1])
-
-    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "float", "--execution-type", "quant", "--adv-execution-type", "float"]
-    subprocess.run(["python", "adversarial/resnet_attack_eval.py", *args1])
-    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "float", "--execution-type", "quant", "--adv-execution-type", "quant"]
-    subprocess.run(["python", "adversarial/resnet_attack_eval.py", *args1])
-    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "float", "--execution-type", "quant", "--adv-execution-type", "transaxx"]
+    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "float", "--execution-type", "float", "--adv-execution-type", "transaxx", "--AT", f"{args.AT}", "--AT-epochs", f"{args.AT_epochs_float}", "--AT-epsilon", f"{args.AT_epsilon}", "--adv-AT", f"{args.adv_AT}"]
     subprocess.run(["python", "adversarial/resnet_attack_eval.py", *args1])
 
-    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "float", "--execution-type", "transaxx", "--adv-execution-type", "float"]
+    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "float", "--execution-type", "quant", "--adv-execution-type", "float", "--AT", f"{args.AT}", "--AT-epochs", f"{args.AT_epochs_float}", "--AT-epsilon", f"{args.AT_epsilon}", "--adv-AT", f"{args.adv_AT}"]
     subprocess.run(["python", "adversarial/resnet_attack_eval.py", *args1])
-    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "float", "--execution-type", "transaxx", "--adv-execution-type", "quant"]
+    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "float", "--execution-type", "quant", "--adv-execution-type", "quant", "--AT", f"{args.AT}", "--AT-epochs", f"{args.AT_epochs_float}", "--AT-epsilon", f"{args.AT_epsilon}", "--adv-AT", f"{args.adv_AT}"]
     subprocess.run(["python", "adversarial/resnet_attack_eval.py", *args1])
-    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "float", "--execution-type", "transaxx", "--adv-execution-type", "transaxx"]
-    subprocess.run(["python", "adversarial/resnet_attack_eval.py", *args1])
-
-
-
-    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "quant", "--execution-type", "float", "--adv-execution-type", "float"]
-    subprocess.run(["python", "adversarial/resnet_attack_eval.py", *args1])
-    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "quant", "--execution-type", "float", "--adv-execution-type", "quant"]
-    subprocess.run(["python", "adversarial/resnet_attack_eval.py", *args1])
-    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "quant", "--execution-type", "float", "--adv-execution-type", "transaxx"]
+    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "float", "--execution-type", "quant", "--adv-execution-type", "transaxx", "--AT", f"{args.AT}", "--AT-epochs", f"{args.AT_epochs_float}", "--AT-epsilon", f"{args.AT_epsilon}", "--adv-AT", f"{args.adv_AT}"]
     subprocess.run(["python", "adversarial/resnet_attack_eval.py", *args1])
 
-    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "quant", "--execution-type", "quant", "--adv-execution-type", "float"]
+    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "float", "--execution-type", "transaxx", "--adv-execution-type", "float", "--AT", f"{args.AT}", "--AT-epochs", f"{args.AT_epochs_float}", "--AT-epsilon", f"{args.AT_epsilon}", "--adv-AT", f"{args.adv_AT}"]
     subprocess.run(["python", "adversarial/resnet_attack_eval.py", *args1])
-    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "quant", "--execution-type", "quant", "--adv-execution-type", "quant"]
+    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "float", "--execution-type", "transaxx", "--adv-execution-type", "quant", "--AT", f"{args.AT}", "--AT-epochs", f"{args.AT_epochs_float}", "--AT-epsilon", f"{args.AT_epsilon}", "--adv-AT", f"{args.adv_AT}"]
     subprocess.run(["python", "adversarial/resnet_attack_eval.py", *args1])
-    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "quant", "--execution-type", "quant", "--adv-execution-type", "transaxx"]
-    subprocess.run(["python", "adversarial/resnet_attack_eval.py", *args1])
-
-    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "quant", "--execution-type", "transaxx", "--adv-execution-type", "float"]
-    subprocess.run(["python", "adversarial/resnet_attack_eval.py", *args1])
-    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "quant", "--execution-type", "transaxx", "--adv-execution-type", "quant"]
-    subprocess.run(["python", "adversarial/resnet_attack_eval.py", *args1])
-    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "quant", "--execution-type", "transaxx", "--adv-execution-type", "transaxx"]
+    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "float", "--execution-type", "transaxx", "--adv-execution-type", "transaxx", "--AT", f"{args.AT}", "--AT-epochs", f"{args.AT_epochs_float}", "--AT-epsilon", f"{args.AT_epsilon}", "--adv-AT", f"{args.adv_AT}"]
     subprocess.run(["python", "adversarial/resnet_attack_eval.py", *args1])
 
 
 
-    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "transaxx", "--execution-type", "float", "--adv-execution-type", "float"]
+    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "quant", "--execution-type", "float", "--adv-execution-type", "float", "--AT", f"{args.AT}", "--AT-epochs", f"{args.AT_epochs}", "--AT-epsilon", f"{args.AT_epsilon}", "--adv-AT", f"{args.adv_AT}"]
     subprocess.run(["python", "adversarial/resnet_attack_eval.py", *args1])
-    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "transaxx", "--execution-type", "float", "--adv-execution-type", "quant"]
+    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "quant", "--execution-type", "float", "--adv-execution-type", "quant", "--AT", f"{args.AT}", "--AT-epochs", f"{args.AT_epochs}", "--AT-epsilon", f"{args.AT_epsilon}", "--adv-AT", f"{args.adv_AT}"]
     subprocess.run(["python", "adversarial/resnet_attack_eval.py", *args1])
-    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "transaxx", "--execution-type", "float", "--adv-execution-type", "transaxx"]
-    subprocess.run(["python", "adversarial/resnet_attack_eval.py", *args1])
-
-    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "transaxx", "--execution-type", "quant", "--adv-execution-type", "float"]
-    subprocess.run(["python", "adversarial/resnet_attack_eval.py", *args1])
-    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "transaxx", "--execution-type", "quant", "--adv-execution-type", "quant"]
-    subprocess.run(["python", "adversarial/resnet_attack_eval.py", *args1])
-    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "transaxx", "--execution-type", "quant", "--adv-execution-type", "transaxx"]
+    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "quant", "--execution-type", "float", "--adv-execution-type", "transaxx", "--AT", f"{args.AT}", "--AT-epochs", f"{args.AT_epochs}", "--AT-epsilon", f"{args.AT_epsilon}", "--adv-AT", f"{args.adv_AT}"]
     subprocess.run(["python", "adversarial/resnet_attack_eval.py", *args1])
 
-    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "transaxx", "--execution-type", "transaxx", "--adv-execution-type", "float"]
+    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "quant", "--execution-type", "quant", "--adv-execution-type", "float", "--AT", f"{args.AT}", "--AT-epochs", f"{args.AT_epochs}", "--AT-epsilon", f"{args.AT_epsilon}", "--adv-AT", f"{args.adv_AT}"]
     subprocess.run(["python", "adversarial/resnet_attack_eval.py", *args1])
-    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "transaxx", "--execution-type", "transaxx", "--adv-execution-type", "quant"]
+    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "quant", "--execution-type", "quant", "--adv-execution-type", "quant", "--AT", f"{args.AT}", "--AT-epochs", f"{args.AT_epochs}", "--AT-epsilon", f"{args.AT_epsilon}", "--adv-AT", f"{args.adv_AT}"]
     subprocess.run(["python", "adversarial/resnet_attack_eval.py", *args1])
-    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "transaxx", "--execution-type", "transaxx", "--adv-execution-type", "transaxx"]
+    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "quant", "--execution-type", "quant", "--adv-execution-type", "transaxx", "--AT", f"{args.AT}", "--AT-epochs", f"{args.AT_epochs}", "--AT-epsilon", f"{args.AT_epsilon}", "--adv-AT", f"{args.adv_AT}"]
+    subprocess.run(["python", "adversarial/resnet_attack_eval.py", *args1])
+
+    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "quant", "--execution-type", "transaxx", "--adv-execution-type", "float", "--AT", f"{args.AT}", "--AT-epochs", f"{args.AT_epochs}", "--AT-epsilon", f"{args.AT_epsilon}", "--adv-AT", f"{args.adv_AT}"]
+    subprocess.run(["python", "adversarial/resnet_attack_eval.py", *args1])
+    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "quant", "--execution-type", "transaxx", "--adv-execution-type", "quant", "--AT", f"{args.AT}", "--AT-epochs", f"{args.AT_epochs}", "--AT-epsilon", f"{args.AT_epsilon}", "--adv-AT", f"{args.adv_AT}"]
+    subprocess.run(["python", "adversarial/resnet_attack_eval.py", *args1])
+    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "quant", "--execution-type", "transaxx", "--adv-execution-type", "transaxx", "--AT", f"{args.AT}", "--AT-epochs", f"{args.AT_epochs}", "--AT-epsilon", f"{args.AT_epsilon}", "--adv-AT", f"{args.adv_AT}"]
+    subprocess.run(["python", "adversarial/resnet_attack_eval.py", *args1])
+
+
+
+    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "transaxx", "--execution-type", "float", "--adv-execution-type", "float", "--AT", f"{args.AT}", "--AT-epochs", f"{args.AT_epochs}", "--AT-epsilon", f"{args.AT_epsilon}", "--adv-AT", f"{args.adv_AT}"]
+    subprocess.run(["python", "adversarial/resnet_attack_eval.py", *args1])
+    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "transaxx", "--execution-type", "float", "--adv-execution-type", "quant", "--AT", f"{args.AT}", "--AT-epochs", f"{args.AT_epochs}", "--AT-epsilon", f"{args.AT_epsilon}", "--adv-AT", f"{args.adv_AT}"]
+    subprocess.run(["python", "adversarial/resnet_attack_eval.py", *args1])
+    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "transaxx", "--execution-type", "float", "--adv-execution-type", "transaxx", "--AT", f"{args.AT}", "--AT-epochs", f"{args.AT_epochs}", "--AT-epsilon", f"{args.AT_epsilon}", "--adv-AT", f"{args.adv_AT}"]
+    subprocess.run(["python", "adversarial/resnet_attack_eval.py", *args1])
+
+    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "transaxx", "--execution-type", "quant", "--adv-execution-type", "float", "--AT", f"{args.AT}", "--AT-epochs", f"{args.AT_epochs}", "--AT-epsilon", f"{args.AT_epsilon}", "--adv-AT", f"{args.adv_AT}"]
+    subprocess.run(["python", "adversarial/resnet_attack_eval.py", *args1])
+    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "transaxx", "--execution-type", "quant", "--adv-execution-type", "quant", "--AT", f"{args.AT}", "--AT-epochs", f"{args.AT_epochs}", "--AT-epsilon", f"{args.AT_epsilon}", "--adv-AT", f"{args.adv_AT}"]
+    subprocess.run(["python", "adversarial/resnet_attack_eval.py", *args1])
+    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "transaxx", "--execution-type", "quant", "--adv-execution-type", "transaxx", "--AT", f"{args.AT}", "--AT-epochs", f"{args.AT_epochs}", "--AT-epsilon", f"{args.AT_epsilon}", "--adv-AT", f"{args.adv_AT}"]
+    subprocess.run(["python", "adversarial/resnet_attack_eval.py", *args1])
+
+    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "transaxx", "--execution-type", "transaxx", "--adv-execution-type", "float", "--AT", f"{args.AT}", "--AT-epochs", f"{args.AT_epochs}", "--AT-epsilon", f"{args.AT_epsilon}", "--adv-AT", f"{args.adv_AT}"]
+    subprocess.run(["python", "adversarial/resnet_attack_eval.py", *args1])
+    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "transaxx", "--execution-type", "transaxx", "--adv-execution-type", "quant", "--AT", f"{args.AT}", "--AT-epochs", f"{args.AT_epochs}", "--AT-epsilon", f"{args.AT_epsilon}", "--adv-AT", f"{args.adv_AT}"]
+    subprocess.run(["python", "adversarial/resnet_attack_eval.py", *args1])
+    args1 = ["--prompt", "0", "--save-data", "1", "--conv-axx-level-list", *map(str, conv_axx_levels), "--neural-network", f"{args.neural_network}", "--adv-neural-network", f"{args.adv_neural_network}", "--adv-conv-axx-level-list", *map(str, adv_conv_axx_levels), "--param-execution-type", "transaxx", "--execution-type", "transaxx", "--adv-execution-type", "transaxx", "--AT", f"{args.AT}", "--AT-epochs", f"{args.AT_epochs}", "--AT-epsilon", f"{args.AT_epsilon}", "--adv-AT", f"{args.adv_AT}"]
     subprocess.run(["python", "adversarial/resnet_attack_eval.py", *args1])
 
     
