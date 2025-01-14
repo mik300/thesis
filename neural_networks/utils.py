@@ -12,6 +12,7 @@ import pickle
 from tqdm import tqdm
 from torch.utils.data import DataLoader, Subset
 import random
+import warnings
 
 from transaxx.classification.utils import *
 from transaxx.layers.adapt_convolution_layer import AdaptConv2D
@@ -212,6 +213,7 @@ def evaluate_test_accuracy(test_loader, model, device="cuda"):
 
 cifar10_mean = (0.4914, 0.4822, 0.4465)
 cifar10_std = (0.2471, 0.2435, 0.2616)
+cifar10_mean_std = {"mean": cifar10_mean, "std": cifar10_std}
 cifar100_mean = (0.5071, 0.4867, 0.4408)
 cifar100_std = (0.2675, 0.2565, 0.2761)
 fashionmnist_mean = 0.286
@@ -332,19 +334,108 @@ def get_loaders_split(dir_, batch_size, dataset_type, num_workers=2, split_val=0
 
     return train_loader, valid_loader, test_loader
 
+class ArgumentWarning(Warning):
+    pass
 
-def init_transaxx(model, approximation_levels, args, quant_bits=8, device='cuda', fake_quant=False):
+def init_transaxx(model, conv_axx_levels, linear_axx_levels, args, quant_bits=8, device='cuda', fake_quant=True):
+    fake_quant = not fake_quant
+    #Initialize conv layers
+    conv2d_layers = [(name, module) for name, module in model.named_modules() if (isinstance(module, torch.nn.Conv2d) or isinstance(module, AdaptConv2D)) and ("head" not in name and "reduction" not in name)]
+    linear_layers = [(name, module) for name, module in model.named_modules() if (isinstance(module, torch.nn.Linear) or isinstance(module, AdaPT_Linear)) and ("head" not in name and "reduction" not in name)]
+    print(f'Number of conv layer is {len(conv2d_layers)}')
+    print(f'Number of linear layer is {len(linear_layers)}')
+
+
+    axx_list = [{'axx_mult' : f'bw_mult_{quant_bits}_{quant_bits}_0', 'axx_power' : 1.0, 'quant_bits' : quant_bits, 'fake_quant' : False}]*len(conv2d_layers)
+    axx_list_linear = [{'axx_mult' : f'bw_mult_{quant_bits}_{quant_bits}_0', 'axx_power' : 1.0, 'quant_bits' : quant_bits, 'fake_quant' : False}]*len(linear_layers)
+
+    print(f'len(conv2d_layers) = {len(conv2d_layers)}')
+    print(f'len(conv_axx_levels) = {len(conv_axx_levels)}')
+    if len(conv2d_layers) != len(conv_axx_levels): #If number of conv_axx_levels is less than number of conv layers, extend conv_axx_levels with all 0s
+        if len(conv2d_layers) < len(conv_axx_levels):
+            warnings.warn(f"Warning: The size of axx-level is larger than the number of conv layers, the first {len(conv2d_layers)} will be used", category=ArgumentWarning)
+            conv_axx_levels = conv_axx_levels[:len(conv2d_layers)]
+        else:
+            num_elements_to_add = len(conv2d_layers) - len(conv_axx_levels)
+            conv_axx_levels.extend([0] * num_elements_to_add)
+
+    if len(linear_layers) != len(linear_axx_levels):
+        if len(linear_layers) < len(linear_axx_levels):
+            warnings.warn(f"Warning: The size of linear-axx-level is larger than the number of linear layers, the first {len(linear_layers)} will be used", category=ArgumentWarning)
+            linear_axx_levels = linear_axx_levels[:len(linear_layers)]
+        else:
+            num_elements_to_add = len(linear_layers) - len(linear_axx_levels)
+            linear_axx_levels.extend([0] * num_elements_to_add)
+
+    for i in range(len(conv_axx_levels)):
+        axx_list[i:i+1] = [{'axx_mult' : f'bw_mult_{quant_bits}_{quant_bits}_{conv_axx_levels[i]}', 'axx_power' : 0.7082, 'quant_bits' : 8, 'fake_quant' : False}] * 1
+    for i in range(len(linear_axx_levels)):
+        axx_list_linear[i:i+1] = [{'axx_mult' : f'bw_mult_{quant_bits}_{quant_bits}_{linear_axx_levels[i]}', 'axx_power' : 0.7082, 'quant_bits' : 8, 'fake_quant' : False}] * 1
+
+
+    start = time.time()
+    replace_conv_layers(model, AdaptConv2D, axx_list, 0, 0, layer_count=[0], returned_power = [0], initialize = True)  
+    replace_linear = False
+    if replace_linear:
+        replace_linear_layers(model,  AdaPT_Linear, axx_list_linear, 0, 0, layer_count=[0], returned_power = [0], initialize = True)  
+    print('Time to compile cuda extensions: ', time.time()-start)
+
+    with torch.cuda.device(0):
+        total_macs, total_params, layer_specs = get_model_complexity_info(model, (3, 32, 32),as_strings=False, print_per_layer_stat=True,
+                                                            custom_modules_hooks={AdaptConv2D : conv_flops_counter_hook}, 
+                                                            param_units='M', flops_units='MMac',
+                                                            verbose=True)
+    print(f'Computational complexity:  {total_macs/1000000:.2f} MMacs')
+    print(f'Number of parameters::  {total_params/1000000:.2f} MParams')     
+
+    _, calib_data = cifar10_data_loader(data_path="./data/", batch_size=args.batch_size)
+    with torch.no_grad():
+        stats = collect_stats(model, calib_data, num_batches=2, device=device)
+        amax = compute_amax(model, method="percentile", percentile=99.99, device=device) 
+
+    for i in range(len(conv2d_layers)):
+        axx_list[i:i+1] = [{'axx_mult' : f'bw_mult_{quant_bits}_{quant_bits}_{conv_axx_levels[i]}', 'axx_power' : 0.7082, 'quant_bits' : quant_bits, 'fake_quant' : fake_quant}] * 1
+    for i in range(len(linear_layers)):
+        axx_list_linear[i:i+1] = [{'axx_mult' : f'bw_mult_{quant_bits}_{quant_bits}_{linear_axx_levels[i]}', 'axx_power' : 0.7082, 'quant_bits' : quant_bits, 'fake_quant' : fake_quant}] * 1
+    
+    returned_power = [0]
+    print(f"axx_list size = {len(axx_list)}")
+    print(f"conv2d_layers size = {len(conv2d_layers)}")
+    print(f"axx_list_linear size = {len(axx_list_linear)}")
+    print(f"linear_layers size = {len(linear_layers)}")
+
+    i = 0
+    for axx in axx_list:
+        print(f"{conv2d_layers[i][0]}: {axx['axx_mult']}")
+        i += 1
+    i = 0
+    print(f'len(axx_list_linear) = {len(axx_list_linear)}')
+    print(f'len(linear_layers) = {len(linear_layers)}')
+    for axx in axx_list_linear:
+        print(f"{linear_layers[i][0]}: {axx['axx_mult']}")
+        i += 1
+    
+    replace_conv_layers(model,  AdaptConv2D, axx_list, total_macs, total_params, layer_count=[0], returned_power = returned_power, initialize = False) 
+    if replace_linear:
+        replace_linear_layers(model, AdaPT_Linear, axx_list_linear, total_macs, total_params, layer_count=[0], returned_power = returned_power, initialize = False) 
+
+
+def init_transaxx_train(model, conv_axx_levels, args, quant_bits=8, device='cuda', fake_quant=True):
+    fake_quant = not fake_quant
+    #Initialize conv layers
     conv2d_layers = [(name, module) for name, module in model.named_modules() if (isinstance(module, torch.nn.Conv2d) or isinstance(module, AdaptConv2D)) and ("head" not in name and "reduction" not in name)]
     print(f'Number of conv layer is {len(conv2d_layers)}')
     axx_list = [{'axx_mult' : f'bw_mult_{quant_bits}_{quant_bits}_0', 'axx_power' : 1.0, 'quant_bits' : quant_bits, 'fake_quant' : False}]*len(conv2d_layers)
-    if len(conv2d_layers) != len(approximation_levels):
-        # Calculate how many elements need to be added
-        num_elements_to_add = len(conv2d_layers) - len(approximation_levels)
-        # If the length of conv2d_layers is greater, add 0s to approximation_levels
-        approximation_levels.extend([0] * num_elements_to_add)
+    if len(conv2d_layers) != len(conv_axx_levels):
+        if len(conv2d_layers) < len(conv_axx_levels):
+            warnings.warn(f"The size of linear-axx-level is larger than the number of conv layers, the first {len(conv2d_layers)} will be used")
+            conv_axx_levels = conv_axx_levels[:len(conv2d_layers)]
+        else:
+            num_elements_to_add = len(conv2d_layers) - len(conv_axx_levels)
+            conv_axx_levels.extend([0] * num_elements_to_add)
 
-    for i in range(len(approximation_levels)):
-        axx_list[i:i+1] = [{'axx_mult' : f'bw_mult_{quant_bits}_{quant_bits}_{approximation_levels[i]}', 'axx_power' : 0.7082, 'quant_bits' : 8, 'fake_quant' : False}] * 1
+    for i in range(len(conv_axx_levels)):
+        axx_list[i:i+1] = [{'axx_mult' : f'bw_mult_{quant_bits}_{quant_bits}_{conv_axx_levels[i]}', 'axx_power' : 0.7082, 'quant_bits' : 8, 'fake_quant' : False}] * 1
 
     start = time.time()
     replace_conv_layers(model, AdaptConv2D, axx_list, 0, 0, layer_count=[0], returned_power = [0], initialize = True)  
@@ -364,7 +455,7 @@ def init_transaxx(model, approximation_levels, args, quant_bits=8, device='cuda'
         amax = compute_amax(model, method="percentile", percentile=99.99, device=device) 
 
     for i in range(len(conv2d_layers)):
-        axx_list[i:i+1] = [{'axx_mult' : f'bw_mult_{quant_bits}_{quant_bits}_{approximation_levels[i]}', 'axx_power' : 0.7082, 'quant_bits' : quant_bits, 'fake_quant' : fake_quant}] * 1
+        axx_list[i:i+1] = [{'axx_mult' : f'bw_mult_{quant_bits}_{quant_bits}_{conv_axx_levels[i]}', 'axx_power' : 0.7082, 'quant_bits' : quant_bits, 'fake_quant' : fake_quant}] * 1
     #axx_list[0:len(conv2d_layers)] = [{'axx_mult' : f'bw_mult_{quant_bits}_{quant_bits}_{appr_level}', 'axx_power' : 0.7082, 'quant_bits' : quant_bits, 'fake_quant' : fake_quant}] * len(conv2d_layers)
     returned_power = [0]
     print(f"axx_list size = {len(axx_list)}")
@@ -376,43 +467,31 @@ def init_transaxx(model, approximation_levels, args, quant_bits=8, device='cuda'
     replace_conv_layers(model,  AdaptConv2D, axx_list, total_macs, total_params, layer_count=[0], returned_power = returned_power, initialize = False) 
 
 
-    # linear_layers = [(name, module) for name, module in model.named_modules() if (isinstance(module, torch.nn.linear) or isinstance(module, AdaPT_Linear)) and ("head" not in name and "reduction" not in name)]
-    # print(f'Number of linear layer is {len(linear_layers)}')
-    # axx_list = [{'axx_mult' : f'bw_mult_{quant_bits}_{quant_bits}_0', 'axx_power' : 1.0, 'quant_bits' : quant_bits, 'fake_quant' : False}]*len(linear_layers)
-    # if len(linear_layers) != len(approximation_levels):
-    #     # Calculate how many elements need to be added
-    #     num_elements_to_add = len(linear_layers) - len(approximation_levels)
-    #     # If the length of linear_layers is greater, add 0s to approximation_levels
-    #     approximation_levels.extend([0] * num_elements_to_add)
+def set_model_axx_levels(model, conv_axx_level_list, conv_axx_level, linear_axx_level_list, linear_axx_level):
+    nb_conv2d_layers = [(name, module) for name, module in model.named_modules() if (isinstance(module, torch.nn.Conv2d) or isinstance(module, AdaPT_Conv2d)) and ("head" not in name and "reduction" not in name)]
+    nb_linear_layers = [(name, module) for name, module in model.named_modules() if (isinstance(module, torch.nn.Linear) or isinstance(module, AdaPT_Linear)) and ("head" not in name and "reduction" not in name)]
 
-    # for i in range(len(approximation_levels)):
-    #     axx_list[i:i+1] = [{'axx_mult' : f'bw_mult_{quant_bits}_{quant_bits}_{approximation_levels[i]}', 'axx_power' : 0.7082, 'quant_bits' : 8, 'fake_quant' : False}] * 1
+    conv_axx_levels = []
+    if conv_axx_level_list is None:
+        for i in range(len(nb_conv2d_layers)):
+            conv_axx_levels.append(conv_axx_level)
+    elif len(nb_conv2d_layers) != len(conv_axx_level_list):
+        if len(nb_conv2d_layers) < len(conv_axx_level_list):
+            warnings.warn(f"The size of linear-axx-level is larger than the number of conv layers, the first {len(conv_axx_level_list)} will be used")
+            conv_axx_levels = conv_axx_level_list[:len(nb_conv2d_layers)]
+        else:
+            num_elements_to_add = len(nb_conv2d_layers) - len(conv_axx_level_list)
+            conv_axx_levels = conv_axx_level_list
+            conv_axx_levels.extend([0] * num_elements_to_add)
+    else:
+        conv_axx_levels = conv_axx_level_list
 
-    # start = time.time()
-    # replace_conv_layers(model,  AdaPT_Linear, axx_list, 0, 0, layer_count=[0], returned_power = [0], initialize = True)  
-    # print('Time to compile cuda extensions: ', time.time()-start)
 
-    # with torch.cuda.device(0):
-    #     total_macs, total_params, layer_specs = get_model_complexity_info(model, (3, 32, 32),as_strings=False, print_per_layer_stat=True,
-    #                                                         custom_modules_hooks={AdaPT_Linear : conv_flops_counter_hook}, 
-    #                                                         param_units='M', flops_units='MMac',
-    #                                                         verbose=True)
-    # print(f'Computational complexity:  {total_macs/1000000:.2f} MMacs')
-    # print(f'Number of parameters::  {total_params/1000000:.2f} MParams')     
+    if linear_axx_level_list is None:
+        linear_axx_levels = []
+        for i in range(len(nb_linear_layers)):
+            linear_axx_levels.append(linear_axx_level)
+    else:
+        linear_axx_levels = linear_axx_level_list
 
-    # _, calib_data = cifar10_data_loader(data_path="./data/", batch_size=args.batch_size)
-    # with torch.no_grad():
-    #     stats = collect_stats(model, calib_data, num_batches=2, device=device)
-    #     amax = compute_amax(model, method="percentile", percentile=99.99, device=device) 
-
-    # for i in range(len(linear_layers)):
-    #     axx_list[i:i+1] = [{'axx_mult' : f'bw_mult_{quant_bits}_{quant_bits}_{approximation_levels[i]}', 'axx_power' : 0.7082, 'quant_bits' : quant_bits, 'fake_quant' : fake_quant}] * 1
-    # #axx_list[0:len(linear_layers)] = [{'axx_mult' : f'bw_mult_{quant_bits}_{quant_bits}_{appr_level}', 'axx_power' : 0.7082, 'quant_bits' : quant_bits, 'fake_quant' : fake_quant}] * len(linear_layers)
-    # returned_power = [0]
-    # print(f"axx_list size = {len(axx_list)}")
-    # print(f"linear_layers size = {len(linear_layers)}")
-    # i = 0
-    # for axx in axx_list:
-    #     print(f"{linear_layers[i][0]}: {axx['axx_mult']}")
-    #     i += 1
-    # replace_linear_layers(model, AdaPT_Linear, axx_list, total_macs, total_params, layer_count=[0], returned_power = returned_power, initialize = False) 
+    return conv_axx_levels, linear_axx_levels
