@@ -43,6 +43,7 @@ def update_layer(in_module, name, mult_type):
 def update_model(model, mult_base, appr_level_list):
     global mult_index
     for name, module in model.named_children():
+        #print(f'mult_index = {mult_index}')
         mult_type = mult_base + str(appr_level_list[mult_index])
         new_module = update_layer(module, name, mult_type)
         if not new_module:
@@ -146,10 +147,6 @@ def main():
         args.adv_activation_function = args.param_activation_function
     if args.adv_neural_network is None:
         args.adv_neural_network = args.param_neural_network
-    if args.adv_conv_axx_level is None:
-        args.adv_conv_axx_level = args.conv_axx_level
-    if args.adv_conv_axx_level_list is None:
-        args.adv_conv_axx_level_list = args.conv_axx_level_list
     
 
     if args.execution_type == 'adapt':
@@ -212,7 +209,6 @@ def main():
         else:
             filename = model_dir + args.param_neural_network + param_namebit + param_namequant + "_" + param_execution_type + "_" + args.dataset + "_" + args.param_activation_function + "_calibrated.pth"
     
-    
 
     if args.execution_type == "quant" or args.execution_type == "adapt":
         filename_sc = model_dir + args.neural_network + param_namebit + param_namequant + "_" + "quant" + "_" + args.dataset +"_" + args.param_activation_function + '_scaling_factors.pkl'
@@ -257,14 +253,14 @@ def main():
 
     if args.param_execution_type == "transaxx":
         if args.execution_type == "transaxx":
-            init_transaxx(model, conv_axx_levels, linear_axx_levels, args, args.transaxx_quant, device, fake_quant=True)
+            init_transaxx(model, conv_axx_levels, linear_axx_levels, args.batch_size, args.transaxx_quant, device, fake_quant=True)
         checkpoint = torch.load(filename, map_location=device)
         model.load_state_dict(checkpoint['model_state_dict'], strict=False)
     else:
         checkpoint = torch.load(filename, map_location=device)
         model.load_state_dict(checkpoint['model_state_dict'], strict=True)
         if args.execution_type == "transaxx":
-            init_transaxx(model, conv_axx_levels, linear_axx_levels, args, args.transaxx_quant, device, fake_quant=True)
+            init_transaxx(model, conv_axx_levels, linear_axx_levels, args.batch_size, args.transaxx_quant, device, fake_quant=True)
         
     
 
@@ -283,6 +279,7 @@ def main():
             approximation_levels = [args.conv_axx_level, args.conv_axx_level, args.conv_axx_level, args.conv_axx_level, args.conv_axx_level, args.conv_axx_level, args.conv_axx_level, args.conv_axx_level]
         else:
             approximation_levels = args.conv_axx_level
+        approximation_levels = approximation_levels * 4
         update_model(model, base_mult, approximation_levels)
 
     if args.nb_attacks == 1:
