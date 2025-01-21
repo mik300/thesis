@@ -14,6 +14,11 @@ import sys
 from neural_networks.adapt.approx_layers import axx_layers as approxNN
 from neural_networks.CIFAR10.resnet import ResidualModule
 
+from neural_networks.utils import init_transaxx
+from transaxx.classification.utils import *
+from transaxx.layers.adapt_convolution_layer import AdaptConv2D
+from transaxx.classification.ptflops import get_model_complexity_info
+from transaxx.classification.ptflops.pytorch_ops import conv_flops_counter_hook
 
 # TODO: pulire, eliminare doppioni, mergiare
 sys.path.append('../adapt')
@@ -55,6 +60,7 @@ def adapt_model_9x9(model, chromosome, axx_linear=False, retrain_type='bias'):
     """
     Assuming only 9x9 multipliers are used, choose configuration using chromosome
     """
+    print(f"chromosome = {chromosome}")
     cnt = 0
     # act_bit = 8
     # weight_bit = 8
@@ -71,8 +77,8 @@ def adapt_model_9x9(model, chromosome, axx_linear=False, retrain_type='bias'):
                     module.freeze_weight = False
                 else:
                     module.axx_mult = axx_mult
-
-                module.update_kernel()
+                if isinstance(module, approxNN.AdaPT_Conv2d):
+                    module.update_kernel()
                 cnt += 1
 
             elif isinstance(module, nn.Sequential):
@@ -90,7 +96,8 @@ def adapt_model_9x9(model, chromosome, axx_linear=False, retrain_type='bias'):
                                 else:
                                     subsub_module.axx_mult = axx_mult
 
-                                subsub_module.update_kernel()
+                                if isinstance(subsub_module, approxNN.AdaPT_Conv2d):
+                                    subsub_module.update_kernel()
                                 cnt += 1
 
             if axx_linear:
@@ -106,6 +113,66 @@ def adapt_model_9x9(model, chromosome, axx_linear=False, retrain_type='bias'):
                     else:
                         module.freeze_bias = False
                     module.update_kernel()
+
+def transaxx_model_8x8(model, chromosome, axx_linear=False, retrain_type='bias'):
+
+    init_transaxx(model, chromosome, [0], 100, 8, device="cuda", fake_quant=True)
+    # """
+    # Assuming only 9x9 multipliers are used, choose configuration using chromosome
+    # """
+    # print(f"chromosome = {chromosome}")
+    # cnt = 0
+    # # act_bit = 8
+    # # weight_bit = 8
+    # # bias_bit = 8
+    # with torch.no_grad():
+    #     for name,module in model._modules.items():
+    #         if isinstance(module, nn.Conv2d) or isinstance(module, AdaptConv2D):
+    #             axx_mult = 'bw_mult_8_8_' + str(int(chromosome[cnt]))
+    #             module.axx_mult = axx_mult
+    #             if retrain_type == 'bias':
+    #                 module.freeze_weight = True
+    #             elif retrain_type == "full":
+    #                 module.axx_mult = axx_mult
+    #                 module.freeze_weight = False
+    #             else:
+    #                 module.axx_mult = axx_mult
+    #             if isinstance(module, approxNN.AdaPT_Conv2d):
+    #                 module.set_axx_kernel()
+    #             cnt += 1
+
+    #         elif isinstance(module, nn.Sequential):
+    #             for sub_name, sub_module in module._modules.items():
+    #                 if isinstance(sub_module, ResidualModule):
+    #                     for subsub_name, subsub_module in sub_module._modules.items():
+    #                         if isinstance(subsub_module, nn.Conv2d) or isinstance(subsub_module, approxNN.AdaPT_Conv2d):
+    #                             axx_mult = 'bw_mult_8_8_' + str(int(chromosome[cnt]))
+    #                             subsub_module.axx_mult = axx_mult
+    #                             if retrain_type == 'bias':
+    #                                 subsub_module.freeze_weight = True
+    #                             elif retrain_type == "full":
+    #                                 subsub_module.axx_mult = axx_mult
+    #                                 subsub_module.freeze_weight = False
+    #                             else:
+    #                                 subsub_module.axx_mult = axx_mult
+
+    #                             if isinstance(subsub_module, approxNN.AdaPT_Conv2d):
+    #                                 subsub_module.set_axx_kernel()
+    #                             cnt += 1
+
+    #         if axx_linear:
+    #             if isinstance(module, nn.Linear) or isinstance(module, AdaPT_Linear):
+    #                 axx_mult = 'bw_mult_8_8_' + str(int(chromosome[cnt]))
+    #                 module.axx_mult = axx_mult
+    #                 if retrain_type == 'bias':
+    #                     module.freeze_weight = True
+    #                     module.freeze_bias = False
+    #                 elif retrain_type == "full":
+    #                     module.freeze_weight = False
+    #                     module.freeze_bias = False
+    #                 else:
+    #                     module.freeze_bias = False
+    #                 module.set_axx_kernel()
 
 
 #
