@@ -35,12 +35,12 @@ attacks_dict = {
     'Pixle': {'x_dimensions': {'type': 'tuple', 'default': (2, 10)}, 'y_dimensions': {'type': 'tuple', 'default': (2, 10)}, 'pixel_mapping': {'type': 'str', 'default': "random"}, 'restarts': {'type': 'int', 'default': 20}, 'max_iterations': {'type': 'int', 'default': 10}, 'update_each_iteration': {'type': 'bool', 'default': False}},
     'FAB': {'norm': {'type': 'str', 'default': "Linf"}, 'eps': {'type': 'float', 'default': 8/255}, 'steps': {'type': 'int', 'default': 10}, 'n_restarts': {'type': 'int', 'default': 1}, 'alpha_max': {'type': 'float', 'default': 0.1}, 'eta': {'type': 'float', 'default': 1.05}, 'beta': {'type': 'float', 'default': 0.9}, 'verbose': {'type': 'bool', 'default': False}, 'seed': {'type': 'int', 'default': 0}, 'multi_targeted': {'type': 'bool', 'default': False}, 'n_classes': {'type': 'int', 'default': 10}},
     'AutoAttack': {'norm': {'type': 'str', 'default': "Linf"}, 'eps': {'type': 'float', 'default': 8/255}, 'version': {'type': 'str', 'default': "standard"}, 'n_classes': {'type': 'int', 'default': 10}, 'seed': {'type': 'int', 'default': 0}, 'verbose': {'type': 'bool', 'default': False}},
-    'Square': {'norm': {'type': 'str', 'default': "Linf"}, 'eps': {'type': 'float', 'default': 8/255}, 'n_queries': {'type': 'int', 'default': 5000}, 'n_restarts': {'type': 'int', 'default': 1}, 'p_init': {'type': 'float', 'default': 0.8}, 'loss': {'type': 'str', 'default': "margin"}, 'resc_schedule': {'type': 'bool', 'default': True}, 'seed': {'type': 'int', 'default': 0}, 'verbose': {'type': 'bool', 'default': False}, 'targeted': {'type': 'bool', 'default': False}}, 
+    'Square': {'norm': {'type': 'str', 'default': "Linf"}, 'eps': {'type': 'float', 'default': 8/255}, 'n_queries': {'type': 'int', 'default': 5000}, 'n_restarts': {'type': 'int', 'default': 1}, 'p_init': {'type': 'float', 'default': 0.8}, 'loss': {'type': 'str', 'default': "margin"}, 'resc_schedule': {'type': 'bool', 'default': True}, 'seed': {'type': 'int', 'default': 0}, 'verbose': {'type': 'bool', 'default': False}}, 
 }
 
 
-def get_attack(prompt=True):
-    default_attack_type = "BIM"
+def get_attack(prompt=False):
+    default_attack_type = "PGD"
     if prompt:
         attack_type = input(f"Enter the attack type [default: {default_attack_type}]: ") or default_attack_type
     else:

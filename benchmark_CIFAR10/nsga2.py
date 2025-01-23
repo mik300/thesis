@@ -23,7 +23,7 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--neural-network', default="resnet32", type=str, help="Choose one from fashionmnist, mnist, resnet8, resnet14, resnet20, resnet32, resnet50, resnet56")
     parser.add_argument('--batch-size', default=100, type=int, help="Number of images processed during each iteration")
-    parser.add_argument('--data-dir', default="/home/michael/thesis_fw/data/dataset/pytorch_only/", type=str, help="Directory in which the MNIST and FASHIONMNIST dataset are stored or should be downloaded")
+    parser.add_argument('--data-dir', default="./data/dataset/pytorch_only/", type=str, help="Directory in which the MNIST and FASHIONMNIST dataset are stored or should be downloaded")
     parser.add_argument('--dataset', default="cifar10", type=str, help="Select cifar10 or cifar100")
     parser.add_argument('--epochs', default=1, type=int, help="Number of retraining epochs executed for each individual during the NSGA search")
     parser.add_argument('--lr-max', default=1e-2, type=float, help="Maximum learning rate for 'cyclic' scheduler, standard learning rate for 'flat' scheduler")

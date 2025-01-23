@@ -132,14 +132,15 @@ def main():
     else:
         param_namequant = ""
 
+    if args.param_execution_type == "quant":
+        calibrated = "_calibrated"
+    else:
+        calibrated = ""
 
     if args.AT == 1:
         filename = AT_model_dir + "AT_" + args.param_neural_network + param_namebit + param_namequant + "_" + param_execution_type + "_" + args.dataset + "_" + args.param_activation_function + "_opt" + args.opt_level + "_alpha" + str(args.AT_alpha) +"_epsilon" + str(args.AT_epsilon) + "_" + str(args.AT_epochs) + ".pth"
     else:
-        if args.execution_type == "transaxx":
-            filename = model_dir + args.param_neural_network + param_namebit + param_namequant + "_" + param_execution_type + "_" + args.dataset + "_" + args.param_activation_function + ".pth"
-        else:
-            filename = model_dir + args.param_neural_network + param_namebit + param_namequant + "_" + param_execution_type + "_" + args.dataset + "_" + args.param_activation_function + "_calibrated.pth"
+        filename = model_dir + args.param_neural_network + param_namebit + param_namequant + "_" + param_execution_type + "_" + args.dataset + "_" + args.param_activation_function + calibrated + ".pth"
     
     if args.param_execution_type == "adapt":
         filename_sc = model_dir + args.param_neural_network + param_namebit + param_namequant + "_" + param_execution_type + "_" + args.dataset + "_" + args.param_activation_function + '_scaling_factors.pkl'
@@ -180,14 +181,14 @@ def main():
 
 
     if args.param_execution_type == "transaxx":
-        init_transaxx_train(model, conv_axx_levels, args, args.transaxx_quant, device, args.fake_quant)
+        init_transaxx_train(model, conv_axx_levels, args.batch_size, args.transaxx_quant, device, args.fake_quant)
         checkpoint = torch.load(filename, map_location=device)
         model.load_state_dict(checkpoint['model_state_dict'], strict=True)
     else:
         checkpoint = torch.load(filename, map_location=device)
         model.load_state_dict(checkpoint['model_state_dict'], strict=True)
         if args.execution_type == "transaxx":
-            init_transaxx_train(model, conv_axx_levels, args, args.transaxx_quant, device, args.fake_quant)
+            init_transaxx_train(model, conv_axx_levels, args.batch_size, args.transaxx_quant, device, args.fake_quant)
 
 
     if args.execution_type == "adapt":

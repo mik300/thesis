@@ -201,13 +201,15 @@ def main():
     else:
         param_namequant = ""
 
+    if args.param_execution_type == "quant":
+        calibrated = "_calibrated"
+    else:
+        calibrated = ""
+
     if args.AT == 1:
         filename = AT_model_dir + "AT_" + args.param_neural_network + param_namebit + param_namequant + "_" + param_execution_type + "_" + args.dataset + "_" + args.param_activation_function + "_opt" + args.opt_level + "_alpha" + str(args.AT_alpha) +"_epsilon" + str(args.AT_epsilon) + "_" + str(args.AT_epochs) + ".pth"
     else:
-        if args.param_execution_type == "transaxx":
-            filename = model_dir + args.param_neural_network + param_namebit + param_namequant + "_" + param_execution_type + "_" + args.dataset + "_" + args.param_activation_function + ".pth"
-        else:
-            filename = model_dir + args.param_neural_network + param_namebit + param_namequant + "_" + param_execution_type + "_" + args.dataset + "_" + args.param_activation_function + "_calibrated.pth"
+        filename = model_dir + args.param_neural_network + param_namebit + param_namequant + "_" + param_execution_type + "_" + args.dataset + "_" + args.param_activation_function + calibrated + ".pth"
     
 
     if args.execution_type == "quant" or args.execution_type == "adapt":
