@@ -93,8 +93,6 @@ def get_args():
     parser.add_argument('--linear-axx-level-list', type=int, nargs='+', help="List of integers specifying levels of approximation for each convolutional layer")
     parser.add_argument('--transaxx-quant', default=8, type=int, help="")
 
-    parser.add_argument('--prompt', default=1, type=int, help="")
-    parser.add_argument('--save-data', default=0, type=int, help="")
     return parser.parse_args()
 
 
@@ -335,7 +333,7 @@ def main():
     print(model)
 
     # Prompt attack type and parameters
-    attack_type, atk_params = get_attack(prompt=params.prompt)
+    attack_type, atk_params = get_attack(prompt=False)
 
     # Get the attack class dynamically and create the attack object
     AttackClass = getattr(torchattacks, attack_type)

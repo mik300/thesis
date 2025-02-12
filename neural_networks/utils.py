@@ -337,7 +337,7 @@ def get_loaders_split(dir_, batch_size, dataset_type, num_workers=2, split_val=0
 class ArgumentWarning(Warning):
     pass
 
-def init_transaxx(model, conv_axx_levels, linear_axx_levels, args, quant_bits=8, device='cuda', fake_quant=True):
+def init_transaxx(model, conv_axx_levels, linear_axx_levels, batch_size, quant_bits=8, device='cuda', fake_quant=True):
     fake_quant = not fake_quant
     #Initialize conv layers
     conv2d_layers = [(name, module) for name, module in model.named_modules() if (isinstance(module, torch.nn.Conv2d) or isinstance(module, AdaptConv2D)) and ("head" not in name and "reduction" not in name)]
@@ -388,7 +388,7 @@ def init_transaxx(model, conv_axx_levels, linear_axx_levels, args, quant_bits=8,
     print(f'Computational complexity:  {total_macs/1000000:.2f} MMacs')
     print(f'Number of parameters::  {total_params/1000000:.2f} MParams')     
 
-    _, calib_data = cifar10_data_loader(data_path="./data/", batch_size=args.batch_size)
+    _, calib_data = cifar10_data_loader(data_path="./data/", batch_size=batch_size)
     with torch.no_grad():
         stats = collect_stats(model, calib_data, num_batches=2, device=device)
         amax = compute_amax(model, method="percentile", percentile=99.99, device=device) 
@@ -420,7 +420,7 @@ def init_transaxx(model, conv_axx_levels, linear_axx_levels, args, quant_bits=8,
         replace_linear_layers(model, AdaPT_Linear, axx_list_linear, total_macs, total_params, layer_count=[0], returned_power = returned_power, initialize = False) 
 
 
-def init_transaxx_train(model, conv_axx_levels, args, quant_bits=8, device='cuda', fake_quant=True):
+def init_transaxx_train(model, conv_axx_levels, batch_size, quant_bits=8, device='cuda', fake_quant=True):
     fake_quant = not fake_quant
     #Initialize conv layers
     conv2d_layers = [(name, module) for name, module in model.named_modules() if (isinstance(module, torch.nn.Conv2d) or isinstance(module, AdaptConv2D)) and ("head" not in name and "reduction" not in name)]
@@ -449,7 +449,7 @@ def init_transaxx_train(model, conv_axx_levels, args, quant_bits=8, device='cuda
     print(f'Computational complexity:  {total_macs/1000000:.2f} MMacs')
     print(f'Number of parameters::  {total_params/1000000:.2f} MParams')     
 
-    _, calib_data = cifar10_data_loader(data_path="./data/", batch_size=args.batch_size)
+    _, calib_data = cifar10_data_loader(data_path="./data/", batch_size=batch_size)
     with torch.no_grad():
         stats = collect_stats(model, calib_data, num_batches=2, device=device)
         amax = compute_amax(model, method="percentile", percentile=99.99, device=device) 
